@@ -93,11 +93,11 @@
     setBusy(true); authNotice(mode==='signup'?'Creazione account in corso…':'Accesso in corso…');
     try {
       if (mode==='signup') {
-        const {data,error}=await db.auth.signUp({
+        const { data, error } = await db.auth.signUp({
     email,
     password,
     options: {
-        emailRedirectTo: window.location.origin + window.location.pathname
+        emailRedirectTo: 'https://mastro1927.github.io/Money-manger/'
     }
 });
         if (error) throw error;
@@ -128,7 +128,9 @@
     if (!email) { authNotice('Scrivi prima la tua email, poi premi “Ho dimenticato la password”.'); return; }
     setBusy(true); authNotice('Invio richiesta…');
     try {
-      const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://mastro1927.github.io/Money-manger/'
+});
       if (error) throw error;
       authNotice('Se l’email è registrata, riceverai un messaggio per reimpostare la password. Aprilo sullo stesso dispositivo o browser.');
     } catch(error) { authNotice(explainError(error)); }
