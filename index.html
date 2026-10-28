@@ -1,904 +1,851 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="description" content="Money Manager: gestisci entrate, uscite, risparmi e statistiche personali.">
-  <title>Money Manager</title>
-
-  <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #131b2e;
-      --panel2: #19243a;
-      --border: #283550;
-      --text: #f4f7fb;
-      --muted: #9ba9bf;
-      --green: #39d98a;
-      --red: #ff6577;
-      --blue: #6d9eff;
-      --purple: #ad8aff;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, Helvetica, sans-serif;
-      line-height: 1.5;
-    }
-
-    button, input, select {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    button:disabled {
-      opacity: .55;
-      cursor: not-allowed;
-    }
-
-    .container {
-      width: min(1150px, 94%);
-      margin: auto;
-    }
-
-    header {
-      padding: 24px 0;
-      border-bottom: 1px solid var(--border);
-      background: #0e1527;
-    }
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 15px;
-      flex-wrap: wrap;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 27px;
-    }
-
-    h1 span {
-      color: var(--green);
-    }
-
-    .header-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    main {
-      padding: 25px 0 50px;
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 22px;
-      margin-bottom: 22px;
-      min-width: 0;
-    }
-
-    h2 {
-      font-size: 20px;
-      margin: 0 0 17px;
-    }
-
-    h3 {
-      font-size: 16px;
-      margin: 0 0 12px;
-    }
-
-    p {
-      color: var(--muted);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 15px;
-      margin-bottom: 22px;
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 15px;
-      padding: 19px;
-      min-width: 0;
-    }
-
-    .card-label {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 9px;
-    }
-
-    .card-value {
-      font-size: clamp(18px, 2.5vw, 26px);
-      font-weight: bold;
-      overflow-wrap: anywhere;
-    }
-
-    .positive {
-      color: var(--green);
-    }
-
-    .negative {
-      color: var(--red);
-    }
-
-    .accent {
-      color: var(--blue);
-    }
-
-    .purple {
-      color: var(--purple);
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      min-width: 0;
-    }
-
-    .field.full {
-      grid-column: 1 / -1;
-    }
-
-    label {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    input, select {
-      width: 100%;
-      min-width: 0;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      background: #0e1628;
-      color: var(--text);
-      outline: none;
-    }
-
-    input:focus, select:focus {
-      border-color: var(--blue);
-    }
-
-    button, .button {
-      border: 0;
-      border-radius: 9px;
-      padding: 11px 15px;
-      background: var(--blue);
-      color: #08101f;
-      font-weight: bold;
-    }
-
-    button.secondary {
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    button.danger {
-      background: #51202c;
-      color: #ffdce1;
-      border: 1px solid #743140;
-    }
-
-    button.green-button {
-      background: var(--green);
-      color: #071b12;
-    }
-
-    .button-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 9px;
-      margin-top: 15px;
-    }
-
-    .notice {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 12px;
-      overflow-wrap: anywhere;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 20px;
-    }
-
-    .transaction {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 13px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .transaction:last-child {
-      border-bottom: 0;
-    }
-
-    .tx-left {
-      min-width: 0;
-    }
-
-    .tx-name {
-      font-weight: bold;
-      overflow-wrap: anywhere;
-    }
-
-    .tx-meta {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 4px;
-      overflow-wrap: anywhere;
-    }
-
-    .tx-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-
-    .delete {
-      padding: 4px 10px;
-      background: #51202c;
-      color: white;
-    }
-
-    .empty {
-      padding: 15px 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .category {
-      margin-bottom: 17px;
-    }
-
-    .category-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .bar {
-      height: 7px;
-      background: #253149;
-      border-radius: 20px;
-      overflow: hidden;
-    }
-
-    .bar span {
-      display: block;
-      height: 100%;
-      background: var(--blue);
-      border-radius: 20px;
-    }
-
-    .goal-progress {
-      height: 10px;
-      background: #253149;
-      border-radius: 20px;
-      overflow: hidden;
-      margin: 15px 0 8px;
-    }
-
-    #goalBar {
-      height: 100%;
-      width: 0;
-      background: var(--green);
-      transition: width .3s;
-    }
-
-    .statistics-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 15px;
-      flex-wrap: wrap;
-      margin-bottom: 18px;
-    }
-
-    .statistics-header h2 {
-      margin: 0;
-    }
-
-    .statistics-header select {
-      max-width: 230px;
-    }
-
-    .stat-cards {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 13px;
-      margin-bottom: 22px;
-    }
-
-    .stat-card {
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 15px;
-      min-width: 0;
-    }
-
-    .stat-card .card-label {
-      min-height: 36px;
-    }
-
-    .stat-card .card-value {
-      font-size: clamp(17px, 2vw, 23px);
-    }
-
-    .chart-wrap {
-      position: relative;
-      width: 100%;
-      height: 300px;
-    }
-
-    .period-expense {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 13px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .period-expense:last-child {
-      border-bottom: 0;
-    }
-
-    .period-expense-name {
-      font-weight: bold;
-      overflow-wrap: anywhere;
-    }
-
-    .period-expense-meta {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 4px;
-    }
-
-    footer {
-      text-align: center;
-      color: var(--muted);
-      font-size: 12px;
-      padding: 10px 0 25px;
-    }
-
-    @media (max-width: 850px) {
-      .cards, .stat-cards {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .layout, .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 520px) {
-      .container {
-        width: 92%;
-      }
-
-      header {
-        padding: 18px 0;
-      }
-
-      h1 {
-        font-size: 23px;
-      }
-
-      .panel {
-        padding: 16px;
-      }
-
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .field.full {
-        grid-column: auto;
-      }
-
-      .cards {
-        gap: 10px;
-      }
-
-      .card {
-        padding: 14px;
-      }
-
-      .stat-cards {
-        gap: 9px;
-      }
-
-      .stat-card {
-        padding: 12px;
-      }
-
-      .chart-wrap {
-        height: 260px;
-      }
-
-      .tx-right {
-        gap: 6px;
-      }
-
-      .transaction {
-        align-items: flex-start;
-      }
-
-      .statistics-header select {
-        max-width: none;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#10131c">
+
+    <title>Money Manager</title>
+
+    <style>
+        :root {
+            --bg: #10131c;
+            --panel: #191e2b;
+            --panel-light: #22293a;
+            --border: #30384b;
+            --text: #f2f4f8;
+            --muted: #9ba5ba;
+            --green: #39d98a;
+            --red: #ff647c;
+            --blue: #6c8cff;
+            --yellow: #ffc857;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+            line-height: 1.5;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 24px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 19px;
+            margin-top: 0;
+        }
+
+        h3 {
+            font-size: 16px;
+        }
+
+        p {
+            color: var(--muted);
+        }
+
+        .header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 17px;
+            min-width: 0;
+        }
+
+        .card-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 23px;
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+
+        .green {
+            color: var(--green);
+        }
+
+        .red {
+            color: var(--red);
+        }
+
+        .blue {
+            color: var(--blue);
+        }
+
+        .yellow {
+            color: var(--yellow);
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .field {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 11px 12px;
+            border-radius: 9px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--blue);
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .row > * {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 11px 14px;
+            background: var(--blue);
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            filter: brightness(1.08);
+        }
+
+        .btn-secondary {
+            background: var(--panel-light);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-danger {
+            background: #552431;
+            color: #ffdbe1;
+        }
+
+        .btn-small {
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+
+        .full-width {
+            width: 100%;
+        }
+
+        .notice {
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 9px;
+            background: var(--panel-light);
+            color: var(--muted);
+            display: none;
+            overflow-wrap: anywhere;
+        }
+
+        .notice.visible {
+            display: block;
+        }
+
+        .notice.success {
+            color: var(--green);
+        }
+
+        .notice.error {
+            color: var(--red);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .goal-progress,
+        .budget-progress {
+            height: 10px;
+            background: #30384b;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .bar {
+            height: 100%;
+            width: 0;
+            border-radius: 20px;
+            background: var(--green);
+            transition: width 0.25s ease;
+        }
+
+        .bar.warning {
+            background: var(--yellow);
+        }
+
+        .bar.danger {
+            background: var(--red);
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .section-header h2 {
+            margin-bottom: 0;
+        }
+
+        .budget-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .budget-item {
+            padding: 15px;
+            background: var(--panel-light);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .budget-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 12px;
+        }
+
+        .budget-category {
+            font-weight: bold;
+        }
+
+        .budget-amount {
+            text-align: right;
+            font-size: 14px;
+        }
+
+        .budget-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .budget-status {
+            font-size: 13px;
+        }
+
+        .budget-status.warning {
+            color: var(--yellow);
+        }
+
+        .budget-status.danger {
+            color: var(--red);
+        }
+
+        .empty {
+            padding: 18px;
+            text-align: center;
+            color: var(--muted);
+            background: var(--panel-light);
+            border-radius: 10px;
+        }
+
+        .list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .transaction {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 13px;
+            background: var(--panel-light);
+            border-radius: 10px;
+        }
+
+        .transaction-info {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .transaction-title {
+            font-weight: bold;
+        }
+
+        .transaction-details {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .transaction-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .transaction-amount {
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .statistics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .stat-card {
+            background: var(--panel-light);
+            border-radius: 10px;
+            padding: 14px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .chart-wrap {
+            position: relative;
+            height: 270px;
+        }
+
+        .category-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .category-row:last-child {
+            border-bottom: 0;
+        }
+
+        .auth-panel {
+            max-width: 480px;
+            margin: 35px auto;
+        }
+
+        .auth-panel h2 {
+            margin-bottom: 8px;
+        }
+
+        footer {
+            color: var(--muted);
+            font-size: 12px;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        @media (max-width: 950px) {
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .cards .card:last-child {
+                grid-column: span 2;
+            }
+
+            .layout,
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 14px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .cards {
+                gap: 8px;
+            }
+
+            .card {
+                padding: 12px;
+            }
+
+            .card-value {
+                font-size: 19px;
+            }
+
+            .panel {
+                padding: 15px;
+            }
+
+            .row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stats-cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .transaction {
+                align-items: start;
+            }
+
+            .transaction-right {
+                flex-direction: column;
+                align-items: end;
+            }
+        }
+    </style>
 </head>
 
 <body>
+<div class="container">
 
-  <header>
-    <div class="container header-content">
-      <h1>Money <span>Manager</span></h1>
+    <header>
+        <div>
+            <h1>Money Manager</h1>
+            <div class="muted">Gestisci le tue entrate, le spese e i tuoi obiettivi.</div>
+        </div>
 
-      <div class="header-actions">
-        <button id="exportBtn" class="secondary hidden" type="button">
-          Esporta backup
-        </button>
+        <div class="header-actions">
+            <button id="exportBtn" class="btn btn-secondary hidden">Esporta backup</button>
+            <button id="importBtn" class="btn btn-secondary hidden">Importa backup</button>
+            <input id="importFile" type="file" accept=".json,application/json" class="hidden">
+            <button id="installBtn" class="btn btn-secondary hidden">Installa app</button>
+            <button id="signOutBtn" class="btn btn-secondary hidden">Esci</button>
+        </div>
+    </header>
 
-        <button id="importBtn" class="secondary hidden" type="button">
-          Importa backup
-        </button>
-
-        <input id="importFile" type="file" accept=".json,application/json" class="hidden">
-
-        <button id="installBtn" class="secondary hidden" type="button">
-          Installa app
-        </button>
-
-        <button id="signOutBtn" class="danger hidden" type="button">
-          Esci
-        </button>
-      </div>
+    <div id="configNotice" class="notice visible">
+        Caricamento dell'applicazione...
     </div>
-  </header>
 
-  <main class="container">
+    <section id="authPanel" class="panel auth-panel hidden">
+        <h2>Accedi al tuo account</h2>
+        <p>Accedi per salvare e sincronizzare i tuoi dati.</p>
 
-    <div id="configNotice" class="notice"></div>
+        <form id="authForm">
+            <div class="field">
+                <label for="authEmail">Email</label>
+                <input id="authEmail" type="email" autocomplete="email" required>
+            </div>
 
-    <!-- LOGIN E REGISTRAZIONE -->
-    <section id="authPanel" class="panel">
-      <h2>Accedi al tuo account</h2>
+            <div class="field">
+                <label for="authPassword">Password</label>
+                <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required>
+            </div>
 
-      <p>
-        Accedi per gestire i tuoi movimenti e sincronizzare i tuoi dati.
-      </p>
+            <button id="loginBtn" class="btn full-width" type="submit">Accedi</button>
 
-      <form id="authForm">
-        <div class="form-grid">
+            <button id="signupBtn" class="btn btn-secondary full-width" type="button" style="margin-top:8px">
+                Crea account
+            </button>
 
-          <div class="field full">
-            <label for="authEmail">Email</label>
-            <input
-              id="authEmail"
-              type="email"
-              placeholder="La tua email"
-              autocomplete="email"
-              required
-            >
-          </div>
-
-          <div class="field full">
-            <label for="authPassword">Password</label>
-            <input
-              id="authPassword"
-              type="password"
-              placeholder="Almeno 8 caratteri"
-              autocomplete="current-password"
-              minlength="8"
-              required
-            >
-          </div>
-
-        </div>
-
-        <div class="button-row">
-          <button id="loginBtn" type="submit" data-mode="login">
-            Accedi
-          </button>
-
-          <button id="signupBtn" class="green-button" type="submit" data-mode="signup">
-            Crea account
-          </button>
-
-          <button id="resetPasswordBtn" class="secondary" type="button">
-            Ho dimenticato la password
-          </button>
-        </div>
-      </form>
-
-      <div id="authNotice" class="notice" aria-live="polite"></div>
-
-      <div id="passwordUpdatePanel" class="hidden">
-        <h3>Imposta una nuova password</h3>
-
-        <form id="passwordUpdateForm">
-          <div class="field">
-            <label for="newPassword">Nuova password</label>
-            <input
-              id="newPassword"
-              type="password"
-              minlength="8"
-              autocomplete="new-password"
-              required
-            >
-          </div>
-
-          <div class="button-row">
-            <button type="submit">Aggiorna password</button>
-          </div>
+            <button id="resetPasswordBtn" class="btn btn-secondary full-width" type="button" style="margin-top:8px">
+                Recupera password
+            </button>
         </form>
-      </div>
+
+        <div id="authNotice" class="notice"></div>
+
+        <div id="passwordUpdatePanel" class="hidden">
+            <h3>Imposta una nuova password</h3>
+
+            <form id="passwordUpdateForm">
+                <div class="field">
+                    <label for="newPassword">Nuova password</label>
+                    <input id="newPassword" type="password" minlength="6" required>
+                </div>
+
+                <button class="btn full-width" type="submit">Aggiorna password</button>
+            </form>
+        </div>
     </section>
 
-    <!-- CONTENUTO PRINCIPALE -->
-    <div id="appContent" class="hidden">
+    <main id="appContent" class="hidden">
 
-      <div id="notice" class="notice" aria-live="polite"></div>
+        <div id="notice" class="notice"></div>
 
-      <!-- RIEPILOGO -->
-      <section class="cards">
-
-        <div class="card">
-          <div class="card-label">Saldo totale</div>
-          <div id="balance" class="card-value accent">€ 0,00</div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">Entrate totali</div>
-          <div id="income" class="card-value positive">€ 0,00</div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">Uscite totali</div>
-          <div id="expense" class="card-value negative">€ 0,00</div>
-        </div>
-
-        <div class="card">
-          <div class="card-label">Entrate del mese</div>
-          <div id="monthIncome" class="card-value positive">€ 0,00</div>
-        </div>
-
-      </section>
-
-      <!-- SECONDO RIEPILOGO -->
-      <section class="cards">
-
-        <div class="card">
-          <div class="card-label">Uscite del mese</div>
-          <div id="monthExpense" class="card-value negative">€ 0,00</div>
-        </div>
-
-      </section>
-
-      <div class="layout">
-
-        <!-- AGGIUNGI MOVIMENTO -->
-        <section class="panel">
-          <h2>Nuovo movimento</h2>
-
-          <form id="txForm">
-            <div class="form-grid">
-
-              <div class="field">
-                <label for="type">Tipo</label>
-                <select id="type" required>
-                  <option value="expense">Uscita</option>
-                  <option value="income">Entrata</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="amount">Importo (€)</label>
-                <input
-                  id="amount"
-                  type="number"
-                  min="0.01"
-                  max="100000000"
-                  step="0.01"
-                  placeholder="0,00"
-                  required
-                >
-              </div>
-
-              <div class="field">
-                <label for="category">Categoria</label>
-                <select id="category" required>
-                  <option value="Alimentari">Alimentari</option>
-                  <option value="Trasporti">Trasporti</option>
-                  <option value="Casa">Casa</option>
-                  <option value="Abbigliamento">Abbigliamento</option>
-                  <option value="Svago">Svago</option>
-                  <option value="Salute">Salute</option>
-                  <option value="Istruzione">Istruzione</option>
-                  <option value="Stipendio">Stipendio</option>
-                  <option value="Regali">Regali</option>
-                  <option value="Abbonamenti">Abbonamenti</option>
-                  <option value="Altro">Altro</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="date">Data</label>
-                <input id="date" type="date" required>
-              </div>
-
-              <div class="field full">
-                <label for="description">Descrizione</label>
-                <input
-                  id="description"
-                  type="text"
-                  maxlength="100"
-                  placeholder="Es. spesa al supermercato"
-                >
-              </div>
-
+        <section class="cards">
+            <div class="card">
+                <div class="card-label">Saldo totale</div>
+                <div id="balance" class="card-value">€ 0,00</div>
             </div>
 
-            <div class="button-row">
-              <button type="submit" class="green-button">
-                Salva movimento
-              </button>
+            <div class="card">
+                <div class="card-label">Entrate totali</div>
+                <div id="income" class="card-value green">€ 0,00</div>
             </div>
 
-            <div id="formNotice" class="notice" aria-live="polite"></div>
-          </form>
+            <div class="card">
+                <div class="card-label">Uscite totali</div>
+                <div id="expense" class="card-value red">€ 0,00</div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Entrate del mese</div>
+                <div id="monthIncome" class="card-value green">€ 0,00</div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Uscite del mese</div>
+                <div id="monthExpense" class="card-value red">€ 0,00</div>
+            </div>
         </section>
 
-        <!-- SALDO E OBIETTIVO -->
-        <section class="panel">
-          <h2>Risparmi e obiettivi</h2>
+        <section class="layout">
+            <div class="panel">
+                <h2>Nuovo movimento</h2>
 
-          <div class="field">
-            <label for="startingBalance">Saldo iniziale (€)</label>
-            <input
-              id="startingBalance"
-              type="number"
-              min="0"
-              max="100000000"
-              step="0.01"
-              value="0"
-            >
-          </div>
+                <form id="txForm">
+                    <div class="field">
+                        <label for="type">Tipo di movimento</label>
+                        <select id="type" required>
+                            <option value="expense">Uscita</option>
+                            <option value="income">Entrata</option>
+                        </select>
+                    </div>
 
-          <div class="button-row">
-            <button id="saveStarting" type="button">
-              Salva saldo iniziale
-            </button>
-          </div>
+                    <div class="field">
+                        <label for="amount">Importo (€)</label>
+                        <input id="amount" type="number" min="0.01" step="0.01" required>
+                    </div>
 
-          <hr style="border:0;border-top:1px solid var(--border);margin:24px 0;">
+                    <div class="field">
+                        <label for="category">Categoria</label>
+                        <select id="category" required>
+                            <option>Alimentari</option>
+                            <option>Trasporti</option>
+                            <option>Casa</option>
+                            <option>Abbigliamento</option>
+                            <option>Svago</option>
+                            <option>Salute</option>
+                            <option>Istruzione</option>
+                            <option>Stipendio</option>
+                            <option>Regali</option>
+                            <option>Abbonamenti</option>
+                            <option>Altro</option>
+                        </select>
+                    </div>
 
-          <div class="field">
-            <label for="goalInput">Obiettivo di risparmio (€)</label>
-            <input
-              id="goalInput"
-              type="number"
-              min="0.01"
-              max="100000000"
-              step="0.01"
-              placeholder="Es. 1000"
-            >
-          </div>
+                    <div class="field">
+                        <label for="date">Data</label>
+                        <input id="date" type="date" required>
+                    </div>
 
-          <div class="button-row">
-            <button id="saveGoal" type="button" class="green-button">
-              Salva obiettivo
-            </button>
-          </div>
+                    <div class="field">
+                        <label for="description">Descrizione</label>
+                        <input id="description" type="text" maxlength="150" placeholder="Es. spesa al supermercato">
+                    </div>
 
-          <div style="margin-top:22px;">
-            <div class="card-label">Saldo attuale</div>
-            <div id="goalBalance" class="card-value positive">€ 0,00</div>
+                    <button id="saveMovementBtn" class="btn full-width" type="submit">
+                        Aggiungi movimento
+                    </button>
+                </form>
 
-            <div class="goal-progress">
-              <div id="goalBar"></div>
+                <div id="formNotice" class="notice"></div>
             </div>
 
-            <div id="goalText" class="notice">
-              Imposta un obiettivo per iniziare.
+            <div class="panel">
+                <h2>Obiettivo di risparmio</h2>
+
+                <div class="field">
+                    <label for="startingBalance">Saldo iniziale (€)</label>
+
+                    <div class="row">
+                        <input id="startingBalance" type="number" step="0.01" min="0">
+                        <button id="saveStarting" class="btn" type="button">Salva</button>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="goalInput">Obiettivo di risparmio (€)</label>
+
+                    <div class="row">
+                        <input id="goalInput" type="number" step="0.01" min="0">
+                        <button id="saveGoal" class="btn" type="button">Salva</button>
+                    </div>
+                </div>
+
+                <div class="muted">Saldo attuale</div>
+                <div id="goalBalance" class="card-value">€ 0,00</div>
+
+                <div class="goal-progress">
+                    <div id="goalBar" class="bar"></div>
+                </div>
+
+                <div id="goalText" class="muted">Imposta un obiettivo per iniziare.</div>
             </div>
-          </div>
         </section>
 
-      </div>
+        <!-- BUDGET MENSILI -->
 
-      <!-- STATISTICHE -->
-      <section class="panel">
-        <div class="statistics-header">
-          <h2>Statistiche delle spese</h2>
+        <section class="panel" id="budgetsPanel">
+            <div class="section-header">
+                <div>
+                    <h2>Budget mensili</h2>
+                    <div class="muted">Imposta un limite di spesa per ogni categoria.</div>
+                </div>
 
-          <div class="field" style="min-width:190px;">
-            <label for="statisticsPeriod">Periodo dei grafici</label>
-
-            <select id="statisticsPeriod">
-              <option value="day">Oggi</option>
-              <option value="week" selected>Ultimi 7 giorni</option>
-              <option value="month">Questo mese</option>
-              <option value="year">Quest'anno</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="stat-cards">
-
-          <div class="stat-card">
-            <div class="card-label">Spese di oggi</div>
-            <div id="dailyExpense" class="card-value negative">€ 0,00</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="card-label">Spese ultimi 7 giorni</div>
-            <div id="weeklyExpense" class="card-value negative">€ 0,00</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="card-label">Spese del mese</div>
-            <div id="monthlyExpense" class="card-value negative">€ 0,00</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="card-label">Spese dell'anno</div>
-            <div id="yearlyExpense" class="card-value negative">€ 0,00</div>
-          </div>
-
-        </div>
-
-        <div class="grid">
-
-          <div class="panel" style="margin:0;">
-            <h3>Spese per categoria</h3>
-            <p>Scopri quali categorie incidono maggiormente sulle tue spese.</p>
-
-            <div class="chart-wrap">
-              <canvas id="categoryChart"></canvas>
+                <div style="min-width:170px">
+                    <label for="budgetMonth">Mese di riferimento</label>
+                    <input id="budgetMonth" type="month" required>
+                </div>
             </div>
-          </div>
 
-          <div class="panel" style="margin:0;">
-            <h3>Andamento delle spese</h3>
-            <p>Confronta le spese nel periodo selezionato.</p>
+            <form id="budgetForm">
+                <div class="row">
+                    <div class="field">
+                        <label for="budgetCategory">Categoria</label>
+                        <select id="budgetCategory" required>
+                            <option>Alimentari</option>
+                            <option>Trasporti</option>
+                            <option>Casa</option>
+                            <option>Abbigliamento</option>
+                            <option>Svago</option>
+                            <option>Salute</option>
+                            <option>Istruzione</option>
+                            <option>Stipendio</option>
+                            <option>Regali</option>
+                            <option>Abbonamenti</option>
+                            <option>Altro</option>
+                        </select>
+                    </div>
 
-            <div class="chart-wrap">
-              <canvas id="expenseChart"></canvas>
+                    <div class="field">
+                        <label for="budgetLimit">Limite mensile (€)</label>
+                        <input id="budgetLimit" type="number" min="0.01" step="0.01" required placeholder="Es. 200">
+                    </div>
+
+                    <div class="field">
+                        <button id="saveBudgetBtn" class="btn full-width" type="submit">
+                            Salva budget
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div id="budgetNotice" class="notice"></div>
+
+            <div id="budgetsSummary" class="muted"></div>
+
+            <div id="budgetsList" class="budget-list">
+                <div class="empty">Caricamento dei budget...</div>
             </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ELENCO SPESE DEL PERIODO -->
-      <section class="panel">
-        <h2>Dettaglio delle spese</h2>
-
-        <p>
-          Qui trovi le singole uscite del periodo selezionato nelle statistiche.
-        </p>
-
-        <div id="periodExpenses">
-          <div class="empty">Nessuna spesa da mostrare.</div>
-        </div>
-      </section>
-
-      <!-- MOVIMENTI -->
-      <div class="layout">
-
-        <section class="panel">
-          <h2>Movimenti registrati</h2>
-
-          <div class="field">
-            <label for="filter">Filtra i movimenti</label>
-
-            <select id="filter">
-              <option value="all">Tutti i movimenti</option>
-              <option value="income">Solo entrate</option>
-              <option value="expense">Solo uscite</option>
-            </select>
-          </div>
-
-          <div id="transactions" style="margin-top:15px;">
-            <div class="empty">Non hai ancora registrato movimenti.</div>
-          </div>
         </section>
 
-        <!-- CATEGORIE -->
+        <!-- STATISTICHE -->
+
         <section class="panel">
-          <h2>Spese per categoria</h2>
+            <div class="statistics-header">
+                <div>
+                    <h2>Statistiche</h2>
+                    <div class="muted">Analizza le tue spese in diversi periodi.</div>
+                </div>
 
-          <p>
-            Riepilogo complessivo delle uscite registrate per ogni categoria.
-          </p>
-
-          <div id="categories">
-            <div class="empty">
-              Le categorie appariranno quando registrerai delle uscite.
+                <div style="min-width:160px">
+                    <label for="statisticsPeriod">Periodo</label>
+                    <select id="statisticsPeriod">
+                        <option value="day">Oggi</option>
+                        <option value="week">Ultimi 7 giorni</option>
+                        <option value="month" selected>Questo mese</option>
+                        <option value="year">Quest'anno</option>
+                    </select>
+                </div>
             </div>
-          </div>
+
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="card-label">Spese oggi</div>
+                    <div id="dailyExpense" class="card-value">€ 0,00</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-label">Spese ultimi 7 giorni</div>
+                    <div id="weeklyExpense" class="card-value">€ 0,00</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-label">Spese del mese</div>
+                    <div id="monthlyExpense" class="card-value">€ 0,00</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-label">Spese dell'anno</div>
+                    <div id="yearlyExpense" class="card-value">€ 0,00</div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div>
+                    <h3>Spese per categoria</h3>
+                    <div class="chart-wrap">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div>
+                    <h3>Andamento delle spese</h3>
+                    <div class="chart-wrap">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Dettaglio del periodo</h3>
+            <div id="periodExpenses"></div>
         </section>
 
-      </div>
+        <!-- MOVIMENTI -->
 
-      <!-- IMPOSTAZIONI -->
-      <section class="panel">
-        <h2>Gestione dei dati</h2>
+        <section class="panel">
+            <div class="section-header">
+                <h2>Movimenti</h2>
 
-        <p>
-          Puoi esportare un backup per conservare una copia dei tuoi dati.
-          Importare un backup sostituisce i movimenti attualmente presenti
-          nel tuo account.
-        </p>
+                <div style="min-width:170px">
+                    <label for="filter">Filtra movimenti</label>
+                    <select id="filter">
+                        <option value="all">Tutti</option>
+                        <option value="income">Solo entrate</option>
+                        <option value="expense">Solo uscite</option>
+                    </select>
+                </div>
+            </div>
 
-        <button id="resetBtn" class="danger" type="button">
-          Azzera i miei dati
-        </button>
-      </section>
+            <div id="transactions" class="list"></div>
+        </section>
 
-    </div>
-  </main>
+        <!-- RIEPILOGO CATEGORIE -->
 
-  <footer class="container">
-    Money Manager · Gestione personale delle finanze
-  </footer>
+        <section class="panel">
+            <h2>Riepilogo categorie</h2>
+            <div id="categories"></div>
+        </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+        <section class="panel">
+            <h2>Gestione dati</h2>
+            <p>Puoi cancellare tutti i movimenti, i budget e le impostazioni del tuo account.</p>
+
+            <button id="resetBtn" class="btn btn-danger">Azzera tutti i dati</button>
+        </section>
+
+    </main>
+
+    <footer>
+        Money Manager · Gestione personale delle finanze
+    </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 
 </body>
 </html>
