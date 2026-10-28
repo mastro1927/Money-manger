@@ -1,1327 +1,1386 @@
 (() => {
-  'use strict';
-
-  const $ = id => document.getElementById(id);
-
-  const today = () => {
-    const d = new Date();
-
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const money = n =>
-    new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(n);
-
-  const escapeHtml = s =>
-    String(s ?? '').replace(/[&<>"']/g, c => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[c]));
-
-  let db = null;
-  let currentUser = null;
-
-  let state = {
-    starting: 0,
-    goal: 0,
-    movements: []
-  };
-
-  let installPrompt = null;
-  let busy = false;
-  let categoryChart = null;
-  let expenseChart = null;
-
-  function notice(message) {
-    $('notice').textContent = message || '';
-  }
-
-  function authNotice(message) {
-    $('authNotice').textContent = message || '';
-  }
-
-  function setBusy(value) {
-    busy = value;
-
-    ['loginBtn', 'signupBtn', 'resetPasswordBtn'].forEach(id => {
-      $(id).disabled = value;
-    });
-  }
-
-  function setSignedIn(isSignedIn) {
-    $('authPanel').classList.toggle('hidden', isSignedIn);
-    $('appContent').classList.toggle('hidden', !isSignedIn);
-
-    $('exportBtn').classList.toggle('hidden', !isSignedIn);
-    $('importBtn').classList.toggle('hidden', !isSignedIn);
-    $('signOutBtn').classList.toggle('hidden', !isSignedIn);
-  }
-
-  function explainError(error) {
-    const message = error && error.message
-      ? error.message
-      : String(error || 'Errore sconosciuto');
-
-    if (/Invalid login credentials/i.test(message)) {
-      return 'Email o password non corretti.';
-    }
-
-    if (/Email not confirmed/i.test(message)) {
-      return 'Conferma prima la tua email usando il messaggio ricevuto.';
-    }
-
-    if (/User already registered/i.test(message)) {
-      return 'Questa email ha già un account: premi Accedi.';
-    }
-
-    if (/Email rate limit exceeded/i.test(message)) {
-      return 'Hai richiesto troppe email in poco tempo. Attendi prima di riprovare.';
-    }
-
-    if (/Failed to fetch|NetworkError/i.test(message)) {
-      return 'Connessione non riuscita. Controlla Internet e la configurazione Supabase.';
-    }
-
-    return message;
-  }
-
-  function totals() {
-    let inc = 0;
-    let out = 0;
-    let mi = 0;
-    let mo = 0;
-
-    const month = today().slice(0, 7);
-
-    for (const x of state.movements) {
-      if (x.type === 'income') {
-        inc += x.amount;
-
-        if (x.date.startsWith(month)) {
-          mi += x.amount;
-        }
-      } else {
-        out += x.amount;
-
-        if (x.date.startsWith(month)) {
-          mo += x.amount;
-        }
-      }
-    }
-
-    return {
-      inc,
-      out,
-      mi,
-      mo,
-      balance: state.starting + inc - out
-    };
-  }
-
-  function dateMinusDays(days) {
-    const d = new Date();
-
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() - days);
-
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
-  function periodMovements(period) {
-    const now = today();
-    const year = now.slice(0, 4);
-    const month = now.slice(0, 7);
-
-    let start = now;
-
-    if (period === 'week') {
-      start = dateMinusDays(6);
-    }
-
-    if (period === 'month') {
-      start = `${month}-01`;
-    }
-
-    if (period === 'year') {
-      start = `${year}-01-01`;
-    }
-
-    return state.movements.filter(x =>
-      x.type === 'expense' &&
-      x.date >= start &&
-      x.date <= now
-    );
-  }
-
-  function periodLabel(period) {
-    return ({
-      day: 'oggi',
-      week: 'negli ultimi 7 giorni',
-      month: 'questo mese',
-      year: 'quest’anno'
-    })[period] || 'nel periodo selezionato';
-  }
-
-  function renderStatistics() {
-    if (
-      !$('statisticsPeriod') ||
-      !$('dailyExpense') ||
-      !$('weeklyExpense') ||
-      !$('monthlyExpense') ||
-      !$('yearlyExpense') ||
-      !$('periodExpenses')
-    ) {
-      return;
-    }
-
-    const now = today();
-    const thisMonth = now.slice(0, 7);
-    const thisYear = now.slice(0, 4);
-
-    const expenses = state.movements.filter(x => x.type === 'expense');
-
-    const sum = list =>
-      list.reduce((total, x) => total + x.amount, 0);
-
-    $('dailyExpense').textContent = money(
-      sum(expenses.filter(x => x.date === now))
-    );
-
-    $('weeklyExpense').textContent = money(
-      sum(expenses.filter(x =>
-        x.date >= dateMinusDays(6) && x.date <= now
-      ))
-    );
-
-    $('monthlyExpense').textContent = money(
-      sum(expenses.filter(x => x.date.startsWith(thisMonth)))
-    );
-
-    $('yearlyExpense').textContent = money(
-      sum(expenses.filter(x => x.date.startsWith(thisYear)))
-    );
-
-    const period = $('statisticsPeriod').value;
-    const selected = periodMovements(period);
-
-    const groups = {};
-
-    selected.forEach(x => {
-      const name = x.category || 'Altro';
-      groups[name] = (groups[name] || 0) + x.amount;
-    });
-
-    const categoryNames = Object.keys(groups);
-    const categoryValues = categoryNames.map(name => groups[name]);
-
-    if (categoryChart) {
-      categoryChart.destroy();
-    }
-
-    if (window.Chart && $('categoryChart')) {
-      categoryChart = new Chart($('categoryChart'), {
-        type: 'doughnut',
-
-        data: {
-          labels: categoryNames.length
-            ? categoryNames
-            : ['Nessuna spesa'],
-
-          datasets: [{
-            data: categoryValues.length
-              ? categoryValues
-              : [1],
-
-            backgroundColor: [
-              '#6d9eff',
-              '#39d98a',
-              '#ff6577',
-              '#ad8aff',
-              '#ffbf69',
-              '#4dd0e1',
-              '#f06292',
-              '#aed581',
-              '#9575cd',
-              '#90a4ae',
-              '#ffd54f'
-            ],
-
-            borderWidth: 0
-          }]
-        },
-
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-
-          plugins: {
-            legend: {
-              position: 'bottom',
-
-              labels: {
-                color: '#f4f7fb'
-              }
-            },
-
-            tooltip: {
-              callbacks: {
-                label: context => categoryValues.length
-                  ? `${context.label}: ${money(context.raw)}`
-                  : 'Nessuna spesa nel periodo'
-              }
-            }
-          }
-        }
-      });
-    }
-
-    const buckets = {};
-
-    selected.forEach(x => {
-      const label = period === 'year'
-        ? x.date.slice(0, 7)
-        : x.date;
-
-      buckets[label] = (buckets[label] || 0) + x.amount;
-    });
-
-    let labels = Object.keys(buckets).sort();
-
-    if (period === 'day') {
-      labels = [now];
-      buckets[now] = sum(selected);
-    }
-
-    if (period === 'week') {
-      labels = [];
-
-      for (let i = 6; i >= 0; i--) {
-        labels.push(dateMinusDays(i));
-      }
-
-      labels.forEach(label => {
-        if (!(label in buckets)) {
-          buckets[label] = 0;
-        }
-      });
-    }
-
-    if (period === 'month') {
-      labels = [];
-
-      const [year, month] = now.split('-').map(Number);
-      const days = new Date(year, month, 0).getDate();
-
-      for (let i = 1; i <= days; i++) {
-        const label =
-          `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-
-        labels.push(label);
-
-        if (!(label in buckets)) {
-          buckets[label] = 0;
-        }
-      }
-    }
-
-    if (period === 'year') {
-      labels = [];
-
-      const year = Number(thisYear);
-
-      for (let month = 1; month <= 12; month++) {
-        const label =
-          `${year}-${String(month).padStart(2, '0')}`;
-
-        labels.push(label);
-
-        if (!(label in buckets)) {
-          buckets[label] = 0;
-        }
-      }
-    }
-
-    const displayLabels = labels.map(label =>
-      period === 'year'
-        ? label
-        : label.slice(5)
-    );
-
-    if (expenseChart) {
-      expenseChart.destroy();
-    }
-
-    if (window.Chart && $('expenseChart')) {
-      expenseChart = new Chart($('expenseChart'), {
-        type: 'bar',
-
-        data: {
-          labels: displayLabels,
-
-          datasets: [{
-            label: 'Spese',
-
-            data: labels.map(label => buckets[label] || 0),
-
-            backgroundColor: '#6d9eff',
-            borderRadius: 5
-          }]
-        },
-
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-
-          scales: {
-            x: {
-              ticks: {
-                color: '#9ba9bf',
-                maxRotation: 60,
-                minRotation: 0
-              },
-
-              grid: {
-                color: 'rgba(155,169,191,.12)'
-              }
-            },
-
-            y: {
-              beginAtZero: true,
-
-              ticks: {
-                color: '#9ba9bf',
-                callback: value => '€' + value
-              },
-
-              grid: {
-                color: 'rgba(155,169,191,.12)'
-              }
-            }
-          },
-
-          plugins: {
-            legend: {
-              labels: {
-                color: '#f4f7fb'
-              }
-            },
-
-            tooltip: {
-              callbacks: {
-                label: context => money(context.raw)
-              }
-            }
-          }
-        }
-      });
-    }
-
-    const sorted = selected.slice().sort((a, b) =>
-      b.date.localeCompare(a.date) ||
-      String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
-    );
-
-    $('periodExpenses').innerHTML = sorted.length
-      ? sorted.map(x => `
-          <div class="period-expense">
-            <div>
-              <div class="period-expense-name">
-                ${escapeHtml(x.description || x.category || 'Uscita')}
-              </div>
-
-              <div class="period-expense-meta">
-                ${escapeHtml(x.date)} · ${escapeHtml(x.category || 'Altro')}
-              </div>
-            </div>
-
-            <strong class="negative">
-              ${money(x.amount)}
-            </strong>
-          </div>
-        `).join('')
-      : `<div class="empty">Non hai registrato uscite ${periodLabel(period)}.</div>`;
-  }
-
-  function render() {
-    const t = totals();
-
-    $('balance').textContent = money(t.balance);
-    $('income').textContent = money(t.inc);
-    $('expense').textContent = money(t.out);
-    $('monthIncome').textContent = money(t.mi);
-    $('monthExpense').textContent = money(t.mo);
-
-    $('startingBalance').value = state.starting;
-    $('goalInput').value = state.goal || '';
-    $('goalBalance').textContent = money(t.balance);
-
-    const pct = state.goal > 0
-      ? Math.max(0, Math.min(100, t.balance / state.goal * 100))
-      : 0;
-
-    $('goalBar').style.width = pct + '%';
-
-    $('goalText').textContent = state.goal > 0
-      ? (
-          pct >= 100
-            ? 'Obiettivo raggiunto!'
-            : `${pct.toFixed(0)}% completato · Mancano ${money(Math.max(0, state.goal - t.balance))}`
-        )
-      : 'Imposta un obiettivo per iniziare.';
-
-    const filter = $('filter').value;
-
-    const list = state.movements
-      .filter(x => filter === 'all' || x.type === filter)
-      .slice()
-      .sort((a, b) =>
-        b.date.localeCompare(a.date) ||
-        String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
-      );
-
-    $('transactions').innerHTML = list.length
-      ? list.map(x => `
-          <div class="transaction">
-            <div class="tx-left">
-              <div class="tx-name">
-                ${escapeHtml(x.description || x.category)}
-              </div>
-
-              <div class="tx-meta">
-                ${escapeHtml(x.date)} · ${escapeHtml(x.category)}
-              </div>
-            </div>
-
-            <div class="tx-right">
-              <strong class="${x.type === 'income' ? 'positive' : 'negative'}">
-                ${x.type === 'income' ? '+' : '−'}${money(x.amount)}
-              </strong>
-
-              <button
-                class="delete"
-                type="button"
-                data-delete="${escapeHtml(x.id)}"
-                aria-label="Elimina movimento"
-              >×</button>
-            </div>
-          </div>
-        `).join('')
-      : `<div class="empty">${state.movements.length
-          ? 'Nessun movimento in questo filtro.'
-          : 'Non hai ancora registrato movimenti.'}</div>`;
-
-    const groups = {};
-
-    state.movements
-      .filter(x => x.type === 'expense')
-      .forEach(x => {
-        const category = x.category || 'Altro';
-
-        groups[category] = (groups[category] || 0) + x.amount;
-      });
-
-    const cats = Object.entries(groups)
-      .sort((a, b) => b[1] - a[1]);
-
-    const maxValue = cats.length
-      ? Math.max(...cats.map(c => c[1]))
-      : 1;
-
-    $('categories').innerHTML = cats.length
-      ? cats.map(([name, val]) => `
-          <div class="category">
-            <div class="category-top">
-              <span>${escapeHtml(name)}</span>
-              <strong>${money(val)}</strong>
-            </div>
-
-            <div class="bar">
-              <span style="width:${val / maxValue * 100}%"></span>
-            </div>
-          </div>
-        `).join('')
-      : '<div class="empty">Le categorie appariranno quando registrerai delle uscite.</div>';
-
-    renderStatistics();
-  }
-
-  async function loadCloudData() {
-    if (!currentUser) {
-      return;
-    }
-
-    notice('Caricamento dei tuoi dati…');
-
-    const { data: settings, error: settingsError } = await db
-      .from('money_manager_settings')
-      .select('starting_balance,goal')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
-
-    if (settingsError) {
-      throw settingsError;
-    }
-
-    if (!settings) {
-      const { error } = await db
-        .from('money_manager_settings')
-        .insert({
-          user_id: currentUser.id,
-          starting_balance: 0,
-          goal: 0
-        });
-
-      if (error && error.code !== '23505') {
-        throw error;
-      }
-    }
-
-    const { data: freshSettings, error: freshSettingsError } = await db
-      .from('money_manager_settings')
-      .select('starting_balance,goal')
-      .eq('user_id', currentUser.id)
-      .single();
-
-    if (freshSettingsError) {
-      throw freshSettingsError;
-    }
-
-    const { data: rows, error: rowsError } = await db
-      .from('money_manager_movements')
-      .select('id,type,amount,category,description,movement_date,created_at')
-      .eq('user_id', currentUser.id)
-      .order('movement_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(10000);
-
-    if (rowsError) {
-      throw rowsError;
-    }
-
-    state = {
-      starting: Number(freshSettings.starting_balance) || 0,
-      goal: Number(freshSettings.goal) || 0,
-
-      movements: (rows || []).map(x => ({
-        id: x.id,
-        type: x.type,
-        amount: Number(x.amount),
-        category: x.category,
-        description: x.description,
-        date: x.movement_date,
-        createdAt: x.created_at
-      }))
+    const today = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+
+        return `${year}-${month}-${day}`;
     };
 
-    render();
+    const currentMonth = () => today().slice(0, 7);
 
-    notice('Dati sincronizzati con il tuo account.');
-  }
-
-  async function saveSettings() {
-    if (!currentUser) {
-      return;
-    }
-
-    const { error } = await db
-      .from('money_manager_settings')
-      .upsert({
-        user_id: currentUser.id,
-        starting_balance: state.starting,
-        goal: state.goal,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'
-      });
-
-    if (error) {
-      throw error;
-    }
-  }
-
-  async function runAuth(mode) {
-    if (busy || !db) {
-      return;
-    }
-
-    const email = $('authEmail').value.trim();
-    const password = $('authPassword').value;
-
-    if (!email || !password) {
-      authNotice('Inserisci email e password.');
-      return;
-    }
-
-    if (password.length < 8) {
-      authNotice('La password deve avere almeno 8 caratteri.');
-      return;
-    }
-
-    setBusy(true);
-
-    authNotice(
-      mode === 'signup'
-        ? 'Creazione account in corso…'
-        : 'Accesso in corso…'
-    );
-
-    try {
-      if (mode === 'signup') {
-        const { data, error } = await db.auth.signUp({
-          email,
-          password,
-
-          options: {
-            emailRedirectTo: 'https://mastro1927.github.io/Money-manger/'
-          }
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        if (data.session) {
-          currentUser = data.user;
-
-          setSignedIn(true);
-
-          await loadCloudData();
-
-          authNotice('');
-        } else {
-          authNotice(
-            'Account creato. Controlla la tua email e conferma l’indirizzo, poi torna qui e accedi.'
-          );
-        }
-      } else {
-        const { data, error } = await db.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        currentUser = data.user;
-
-        setSignedIn(true);
-
-        await loadCloudData();
-
-        authNotice('');
-      }
-    } catch (error) {
-      currentUser = null;
-
-      setSignedIn(false);
-
-      authNotice(explainError(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  $('authForm').addEventListener('submit', e => {
-    e.preventDefault();
-
-    const mode = e.submitter?.dataset.mode || 'login';
-
-    runAuth(mode);
-  });
-
-  $('resetPasswordBtn').addEventListener('click', async () => {
-    if (!db) {
-      return;
-    }
-
-    const email = $('authEmail').value.trim();
-
-    if (!email) {
-      authNotice(
-        'Scrivi prima la tua email, poi premi “Ho dimenticato la password”.'
-      );
-
-      return;
-    }
-
-    setBusy(true);
-
-    authNotice('Invio richiesta…');
-
-    try {
-      const { error } = await db.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://mastro1927.github.io/Money-manger/'
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      authNotice(
-        'Se l’email è registrata, riceverai un messaggio per reimpostare la password.'
-      );
-    } catch (error) {
-      authNotice(explainError(error));
-    } finally {
-      setBusy(false);
-    }
-  });
-
-  $('passwordUpdateForm').addEventListener('submit', async e => {
-    e.preventDefault();
-
-    const password = $('newPassword').value;
-
-    if (password.length < 8) {
-      authNotice('La nuova password deve avere almeno 8 caratteri.');
-      return;
-    }
-
-    const button = $('passwordUpdateForm').querySelector('button');
-
-    button.disabled = true;
-
-    try {
-      const { error } = await db.auth.updateUser({
-        password
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      $('passwordUpdatePanel').classList.add('hidden');
-      $('newPassword').value = '';
-
-      authNotice('Password aggiornata. Ora puoi accedere con la nuova password.');
-
-      await db.auth.signOut();
-
-      currentUser = null;
-
-      setSignedIn(false);
-    } catch (error) {
-      authNotice(explainError(error));
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  $('signOutBtn').addEventListener('click', async () => {
-    if (!db) {
-      return;
-    }
-
-    const { error } = await db.auth.signOut();
-
-    state = {
-      starting: 0,
-      goal: 0,
-      movements: []
+    const money = value => {
+        return new Intl.NumberFormat("it-IT", {
+            style: "currency",
+            currency: "EUR"
+        }).format(Number(value) || 0);
     };
 
-    currentUser = null;
-
-    setSignedIn(false);
-
-    render();
-
-    notice('');
-
-    authNotice(
-      error
-        ? 'Sei uscito dall’app.'
-        : 'Hai effettuato la disconnessione.'
-    );
-  });
-
-  $('date').value = today();
-
-  $('txForm').addEventListener('submit', async e => {
-    e.preventDefault();
-
-    if (!currentUser) {
-      return;
-    }
-
-    const amount = Number($('amount').value);
-    const date = $('date').value;
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      amount > 100000000
-    ) {
-      $('formNotice').textContent = 'Inserisci un importo valido.';
-      return;
-    }
-
-    if (!date || date > today()) {
-      $('formNotice').textContent = 'Inserisci una data valida, non futura.';
-      return;
-    }
-
-    const button = $('txForm').querySelector('button[type="submit"]');
-
-    button.disabled = true;
-
-    try {
-      const row = {
-        user_id: currentUser.id,
-        type: $('type').value,
-        amount,
-        category: $('category').value,
-        description: $('description').value.trim(),
-        movement_date: date
-      };
-
-      const { data, error } = await db
-        .from('money_manager_movements')
-        .insert(row)
-        .select('id,type,amount,category,description,movement_date,created_at')
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      state.movements.push({
-        id: data.id,
-        type: data.type,
-        amount: Number(data.amount),
-        category: data.category,
-        description: data.description,
-        date: data.movement_date,
-        createdAt: data.created_at
-      });
-
-      render();
-
-      $('amount').value = '';
-      $('description').value = '';
-
-      $('formNotice').textContent =
-        'Movimento salvato online nel tuo account.';
-    } catch (error) {
-      $('formNotice').textContent =
-        'Non è stato possibile salvare: ' + explainError(error);
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  $('transactions').addEventListener('click', async e => {
-    const button = e.target.closest('[data-delete]');
-
-    if (!button || !currentUser) {
-      return;
-    }
-
-    if (!confirm('Vuoi eliminare questo movimento?')) {
-      return;
-    }
-
-    button.disabled = true;
-
-    try {
-      const { error } = await db
-        .from('money_manager_movements')
-        .delete()
-        .eq('id', button.dataset.delete)
-        .eq('user_id', currentUser.id);
-
-      if (error) {
-        throw error;
-      }
-
-      state.movements = state.movements.filter(
-        x => String(x.id) !== button.dataset.delete
-      );
-
-      render();
-
-      notice('Movimento eliminato.');
-    } catch (error) {
-      notice(
-        'Non è stato possibile eliminare il movimento: ' +
-        explainError(error)
-      );
-
-      button.disabled = false;
-    }
-  });
-
-  $('filter').addEventListener('change', render);
-
-  $('statisticsPeriod').addEventListener('change', renderStatistics);
-
-  $('saveStarting').addEventListener('click', async () => {
-    const value = Number($('startingBalance').value);
-
-    if (
-      !Number.isFinite(value) ||
-      value < 0 ||
-      value > 100000000
-    ) {
-      notice('Inserisci un saldo iniziale valido.');
-      return;
-    }
-
-    const old = state.starting;
-
-    state.starting = value;
-
-    try {
-      await saveSettings();
-
-      render();
-
-      notice('Saldo iniziale salvato nel tuo account.');
-    } catch (error) {
-      state.starting = old;
-
-      render();
-
-      notice('Errore nel salvataggio: ' + explainError(error));
-    }
-  });
-
-  $('saveGoal').addEventListener('click', async () => {
-    const value = Number($('goalInput').value);
-
-    if (
-      !Number.isFinite(value) ||
-      value <= 0 ||
-      value > 100000000
-    ) {
-      notice('Inserisci un obiettivo maggiore di zero.');
-      return;
-    }
-
-    const old = state.goal;
-
-    state.goal = value;
-
-    try {
-      await saveSettings();
-
-      render();
-
-      notice('Obiettivo salvato nel tuo account.');
-    } catch (error) {
-      state.goal = old;
-
-      render();
-
-      notice('Errore nel salvataggio: ' + explainError(error));
-    }
-  });
-
-  function download(name, content, type) {
-    const url = URL.createObjectURL(
-      new Blob([content], { type })
-    );
-
-    const a = document.createElement('a');
-
-    a.href = url;
-    a.download = name;
-
-    document.body.appendChild(a);
-
-    a.click();
-    a.remove();
-
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  $('exportBtn').addEventListener('click', () => {
-    download(
-      'money-manager-backup.json',
-
-      JSON.stringify({
-        ...state,
-        backupVersion: 2,
-        exportedAt: new Date().toISOString()
-      }, null, 2),
-
-      'application/json'
-    );
-
-    notice('Backup esportato. Conserva il file in un posto sicuro.');
-  });
-
-  $('importBtn').addEventListener('click', () => {
-    $('importFile').click();
-  });
-
-  $('importFile').addEventListener('change', async () => {
-    const file = $('importFile').files[0];
-
-    if (!file || !currentUser) {
-      return;
-    }
-
-    try {
-      const data = JSON.parse(await file.text());
-
-      if (
-        !data ||
-        !Array.isArray(data.movements) ||
-        !Number.isFinite(Number(data.starting)) ||
-        Number(data.starting) < 0 ||
-        !Number.isFinite(Number(data.goal)) ||
-        Number(data.goal) < 0
-      ) {
-        throw new Error('Formato non valido');
-      }
-
-      const movements = data.movements
-        .filter(x =>
-          x &&
-          ['income', 'expense'].includes(x.type) &&
-          Number.isFinite(Number(x.amount)) &&
-          Number(x.amount) > 0 &&
-          Number(x.amount) <= 100000000 &&
-          typeof x.date === 'string' &&
-          /^\d{4}-\d{2}-\d{2}$/.test(x.date) &&
-          x.date <= today()
-        )
-        .slice(0, 10000)
-        .map(x => ({
-          user_id: currentUser.id,
-          type: x.type,
-          amount: Number(x.amount),
-          category: String(x.category || 'Altro').slice(0, 50),
-          description: String(x.description || '').slice(0, 100),
-          movement_date: x.date
-        }));
-
-      if (!confirm(
-        `Importare ${movements.length} movimenti? I movimenti attuali di questo account saranno sostituiti.`
-      )) {
-        return;
-      }
-
-      notice('Ripristino backup in corso…');
-
-      const del = await db
-        .from('money_manager_movements')
-        .delete()
-        .eq('user_id', currentUser.id);
-
-      if (del.error) {
-        throw del.error;
-      }
-
-      for (let i = 0; i < movements.length; i += 500) {
-        const batch = movements.slice(i, i + 500);
-
-        if (batch.length) {
-          const result = await db
-            .from('money_manager_movements')
-            .insert(batch);
-
-          if (result.error) {
-            throw result.error;
-          }
-        }
-      }
-
-      state.starting = Number(data.starting);
-      state.goal = Number(data.goal);
-
-      await saveSettings();
-      await loadCloudData();
-
-      notice('Backup ripristinato nel tuo account.');
-    } catch (error) {
-      notice(
-        'Backup non ripristinato: ' +
-        explainError(error) +
-        '. Controlla i dati e riprova.'
-      );
-    }
-
-    $('importFile').value = '';
-  });
-
-  $('resetBtn').addEventListener('click', async () => {
-    if (!currentUser) {
-      return;
-    }
-
-    const confirmed = confirm(
-      'Vuoi cancellare saldo, obiettivo e tutti i movimenti del tuo account? Questa operazione non si può annullare.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const { error } = await db
-        .from('money_manager_movements')
-        .delete()
-        .eq('user_id', currentUser.id);
-
-      if (error) {
-        throw error;
-      }
-
-      state = {
+    const escapeHtml = value => {
+        return String(value ?? "").replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        })[char]);
+    };
+
+    const dbConfig = window.MONEY_MANAGER_CONFIG;
+
+    let db = null;
+    let currentUser = null;
+    let categoryChart = null;
+    let expenseChart = null;
+    let installPrompt = null;
+
+    const state = {
         starting: 0,
         goal: 0,
-        movements: []
-      };
+        movements: [],
+        budgets: []
+    };
 
-      await saveSettings();
+    const $ = id => document.getElementById(id);
 
-      render();
+    function showNotice(id, message, type = "") {
+        const element = $(id);
 
-      notice('I dati del tuo account sono stati azzerati.');
-    } catch (error) {
-      notice('Errore durante l’azzeramento: ' + explainError(error));
-    }
-  });
+        if (!element) return;
 
-  window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
+        element.textContent = message;
+        element.className = "notice visible";
 
-    installPrompt = e;
-
-    $('installBtn').classList.remove('hidden');
-  });
-
-  $('installBtn').addEventListener('click', async () => {
-    if (!installPrompt) {
-      notice(
-        'Usa il menu del browser e scegli “Installa app” o “Aggiungi alla schermata Home”.'
-      );
-
-      return;
+        if (type) {
+            element.classList.add(type);
+        }
     }
 
-    installPrompt.prompt();
+    function hideNotice(id) {
+        const element = $(id);
 
-    await installPrompt.userChoice;
+        if (!element) return;
 
-    installPrompt = null;
-
-    $('installBtn').classList.add('hidden');
-  });
-
-  if (
-    'serviceWorker' in navigator &&
-    location.protocol.startsWith('http')
-  ) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {
-        notice(
-          'La modalità offline non è disponibile. Per usare i dati serve Internet.'
-        );
-      });
-    });
-  }
-
-  async function start() {
-    setSignedIn(false);
-
-    const cfg = window.MONEY_MANAGER_CONFIG || {};
-
-    if (
-      !window.supabase ||
-      !cfg.url ||
-      !cfg.publishableKey ||
-      cfg.url.includes('INCOLLA_QUI') ||
-      cfg.publishableKey.includes('INCOLLA_QUI')
-    ) {
-      $('configNotice').textContent =
-        'Configurazione necessaria: controlla URL e publishable key nel file config.js.';
-
-      $('loginBtn').disabled = true;
-      $('signupBtn').disabled = true;
-      $('resetPasswordBtn').disabled = true;
-
-      return;
+        element.textContent = "";
+        element.className = "notice";
     }
 
-    db = window.supabase.createClient(
-      cfg.url,
-      cfg.publishableKey
-    );
+    function setBusy(buttonId, busy, busyText = "Attendere...") {
+        const button = $(buttonId);
 
-    $('configNotice').textContent =
-      'I dati si sincronizzano online. Per visualizzarli devi accedere al tuo account.';
+        if (!button) return;
 
-    try {
-      const { data, error } = await db.auth.getSession();
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.session) {
-        currentUser = data.session.user;
-
-        setSignedIn(true);
-
-        await loadCloudData();
-      }
-    } catch (error) {
-      currentUser = null;
-
-      setSignedIn(false);
-
-      authNotice(
-        'Impossibile collegarsi al database: ' +
-        explainError(error)
-      );
+        if (busy) {
+            button.dataset.originalText = button.textContent;
+            button.textContent = busyText;
+            button.disabled = true;
+        } else {
+            button.textContent = button.dataset.originalText || button.textContent;
+            button.disabled = false;
+        }
     }
 
-    db.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        $('passwordUpdatePanel').classList.remove('hidden');
+    function setSignedIn(signedIn) {
+        $("authPanel").classList.toggle("hidden", signedIn);
+        $("appContent").classList.toggle("hidden", !signedIn);
 
-        authNotice('Inserisci la nuova password qui sotto.');
-      } else if (event === 'SIGNED_OUT') {
-        currentUser = null;
+        $("signOutBtn").classList.toggle("hidden", !signedIn);
+        $("exportBtn").classList.toggle("hidden", !signedIn);
+        $("importBtn").classList.toggle("hidden", !signedIn);
 
-        state = {
-          starting: 0,
-          goal: 0,
-          movements: []
+        $("configNotice").classList.toggle("hidden", signedIn);
+
+        if (signedIn) {
+            $("date").value = today();
+
+            if (!$("budgetMonth").value) {
+                $("budgetMonth").value = currentMonth();
+            }
+        }
+    }
+
+    function explainError(error) {
+        if (!error) {
+            return "Si è verificato un errore.";
+        }
+
+        const message = error.message || String(error);
+
+        if (message.includes("Invalid login credentials")) {
+            return "Email o password non corretti.";
+        }
+
+        if (message.includes("Email not confirmed")) {
+            return "Devi prima confermare la tua email.";
+        }
+
+        if (message.includes("User already registered")) {
+            return "Questa email è già registrata. Prova ad accedere.";
+        }
+
+        if (message.includes("Failed to fetch")) {
+            return "Connessione non disponibile. Controlla Internet.";
+        }
+
+        if (
+            message.includes("money_manager_budgets") ||
+            message.includes("money_manager_movements") ||
+            message.includes("money_manager_settings")
+        ) {
+            return "Errore nelle tabelle di Supabase. Controlla il nome delle tabelle e le autorizzazioni.";
+        }
+
+        return message;
+    }
+
+    function totals() {
+        let income = 0;
+        let expense = 0;
+
+        for (const movement of state.movements) {
+            const amount = Number(movement.amount) || 0;
+
+            if (movement.type === "income") {
+                income += amount;
+            } else {
+                expense += amount;
+            }
+        }
+
+        return {
+            income,
+            expense,
+            balance: Number(state.starting) + income - expense
+        };
+    }
+
+    function sumExpenses(movements) {
+        return movements.reduce((total, movement) => {
+            if (movement.type === "expense") {
+                return total + Number(movement.amount || 0);
+            }
+
+            return total;
+        }, 0);
+    }
+
+    function getMonthMovements(month) {
+        return state.movements.filter(movement => {
+            return movement.date && movement.date.startsWith(month);
+        });
+    }
+
+    function dateMinusDays(days) {
+        const date = new Date();
+
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() - days);
+
+        return [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, "0"),
+            String(date.getDate()).padStart(2, "0")
+        ].join("-");
+    }
+
+    function periodMovements(period) {
+        const now = new Date();
+        const currentDay = today();
+        const currentYear = String(now.getFullYear());
+        const currentMonthValue = currentMonth();
+
+        return state.movements.filter(movement => {
+            if (!movement.date) return false;
+
+            if (period === "day") {
+                return movement.date === currentDay;
+            }
+
+            if (period === "week") {
+                return movement.date >= dateMinusDays(6) &&
+                    movement.date <= currentDay;
+            }
+
+            if (period === "month") {
+                return movement.date.startsWith(currentMonthValue);
+            }
+
+            if (period === "year") {
+                return movement.date.startsWith(currentYear);
+            }
+
+            return false;
+        });
+    }
+
+    function periodLabel(period) {
+        const labels = {
+            day: "Oggi",
+            week: "Ultimi 7 giorni",
+            month: "Questo mese",
+            year: "Quest'anno"
         };
 
-        setSignedIn(false);
+        return labels[period] || "Periodo";
+    }
+
+    function render() {
+        const result = totals();
+
+        const monthMovements = getMonthMovements(currentMonth());
+        const monthIncome = monthMovements.reduce((total, movement) => {
+            return total + (
+                movement.type === "income"
+                    ? Number(movement.amount || 0)
+                    : 0
+            );
+        }, 0);
+
+        const monthExpense = sumExpenses(monthMovements);
+
+        $("balance").textContent = money(result.balance);
+        $("income").textContent = money(result.income);
+        $("expense").textContent = money(result.expense);
+        $("monthIncome").textContent = money(monthIncome);
+        $("monthExpense").textContent = money(monthExpense);
+
+        $("startingBalance").value = state.starting;
+        $("goalInput").value = state.goal;
+
+        $("goalBalance").textContent = money(result.balance);
+
+        if (state.goal > 0) {
+            const percentage = Math.max(
+                0,
+                Math.min(100, result.balance / state.goal * 100)
+            );
+
+            $("goalBar").style.width = `${percentage}%`;
+
+            $("goalText").textContent =
+                `${percentage.toFixed(1)}% raggiunto · Mancano ${money(Math.max(0, state.goal - result.balance))}`;
+
+            if (result.balance >= state.goal) {
+                $("goalText").textContent =
+                    `Obiettivo raggiunto! Saldo: ${money(result.balance)}.`;
+            }
+        } else {
+            $("goalBar").style.width = "0%";
+            $("goalText").textContent = "Imposta un obiettivo per iniziare.";
+        }
+
+        renderTransactions();
+        renderCategories();
+        renderStatistics();
+        renderBudgets();
+    }
+
+    async function loadCloudData() {
+        const { data: settings, error: settingsError } = await db
+            .from("money_manager_settings")
+            .select("*")
+            .eq("user_id", currentUser.id)
+            .maybeSingle();
+
+        if (settingsError) throw settingsError;
+
+        if (settings) {
+            state.starting = Number(settings.starting_balance) || 0;
+            state.goal = Number(settings.goal) || 0;
+        } else {
+            const { error } = await db
+                .from("money_manager_settings")
+                .upsert({
+                    user_id: currentUser.id,
+                    starting_balance: 0,
+                    goal: 0
+                }, {
+                    onConflict: "user_id"
+                });
+
+            if (error) throw error;
+
+            state.starting = 0;
+            state.goal = 0;
+        }
+
+        const { data: movements, error: movementsError } = await db
+            .from("money_manager_movements")
+            .select("*")
+            .eq("user_id", currentUser.id)
+            .order("movement_date", { ascending: false })
+            .order("created_at", { ascending: false });
+
+        if (movementsError) throw movementsError;
+
+        state.movements = (movements || []).map(movement => ({
+            id: movement.id,
+            type: movement.type,
+            amount: Number(movement.amount) || 0,
+            category: movement.category || "Altro",
+            description: movement.description || "",
+            date: movement.movement_date
+        }));
+
+        await loadBudgets();
 
         render();
-      } else if (
-        event === 'SIGNED_IN' &&
-        session &&
-        (!currentUser || currentUser.id !== session.user.id)
-      ) {
-        currentUser = session.user;
+    }
 
-        setSignedIn(true);
+    async function loadBudgets() {
+        const { data, error } = await db
+            .from("money_manager_budgets")
+            .select("*")
+            .eq("user_id", currentUser.id)
+            .order("month", { ascending: false })
+            .order("category", { ascending: true });
 
-        setTimeout(() => {
-          loadCloudData().catch(error => {
-            notice('Errore nel caricamento: ' + explainError(error));
-          });
-        }, 0);
-      }
-    });
-  }
+        if (error) throw error;
 
-  render();
+        state.budgets = (data || []).map(budget => ({
+            id: budget.id,
+            category: budget.category,
+            month: budget.month,
+            limit: Number(budget.limit_amount) || 0
+        }));
+    }
 
-  start();
+    async function saveSettings() {
+        const { error } = await db
+            .from("money_manager_settings")
+            .upsert({
+                user_id: currentUser.id,
+                starting_balance: state.starting,
+                goal: state.goal,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: "user_id"
+            });
+
+        if (error) throw error;
+    }
+
+    async function saveBudgetToCloud(category, month, limit) {
+        const { error } = await db
+            .from("money_manager_budgets")
+            .upsert({
+                user_id: currentUser.id,
+                category,
+                month,
+                limit_amount: limit
+            }, {
+                onConflict: "user_id,category,month"
+            });
+
+        if (error) throw error;
+    }
+
+    function renderBudgets() {
+        const selectedMonth = $("budgetMonth").value || currentMonth();
+
+        const monthBudgets = state.budgets
+            .filter(budget => budget.month === selectedMonth)
+            .sort((a, b) => a.category.localeCompare(b.category, "it"));
+
+        const monthMovements = getMonthMovements(selectedMonth)
+            .filter(movement => movement.type === "expense");
+
+        const monthTotal = sumExpenses(monthMovements);
+
+        $("budgetsSummary").textContent =
+            `Spese totali del mese: ${money(monthTotal)}`;
+
+        if (monthBudgets.length === 0) {
+            $("budgetsList").innerHTML = `
+                <div class="empty">
+                    Nessun budget impostato per questo mese.
+                    <br>
+                    Aggiungi un limite qui sopra per iniziare.
+                </div>
+            `;
+
+            return;
+        }
+
+        $("budgetsList").innerHTML = monthBudgets.map(budget => {
+            const spent = monthMovements
+                .filter(movement => movement.category === budget.category)
+                .reduce((total, movement) => {
+                    return total + Number(movement.amount || 0);
+                }, 0);
+
+            const limit = Number(budget.limit) || 0;
+            const remaining = limit - spent;
+            const percentage = limit > 0 ? spent / limit * 100 : 0;
+            const barPercentage = Math.min(100, percentage);
+
+            let barClass = "";
+            let statusClass = "";
+            let statusText = `Disponibili ${money(remaining)}`;
+
+            if (percentage >= 100) {
+                barClass = "danger";
+                statusClass = "danger";
+                statusText = `Limite superato di ${money(Math.abs(remaining))}`;
+            } else if (percentage >= 80) {
+                barClass = "warning";
+                statusClass = "warning";
+                statusText = `Attenzione: restano ${money(remaining)}`;
+            }
+
+            return `
+                <div class="budget-item">
+                    <div class="budget-top">
+                        <div>
+                            <div class="budget-category">
+                                ${escapeHtml(budget.category)}
+                            </div>
+
+                            <div class="muted">
+                                Limite: ${money(limit)}
+                            </div>
+                        </div>
+
+                        <div class="budget-amount">
+                            <div><strong>${money(spent)}</strong></div>
+                            <div class="muted">
+                                ${percentage.toFixed(0)}% utilizzato
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="budget-progress">
+                        <div
+                            class="bar ${barClass}"
+                            style="width:${barPercentage}%"
+                        ></div>
+                    </div>
+
+                    <div class="budget-bottom">
+                        <div class="budget-status ${statusClass}">
+                            ${escapeHtml(statusText)}
+                        </div>
+
+                        <button
+                            class="btn btn-secondary btn-small"
+                            data-edit-budget="${escapeHtml(budget.category)}"
+                        >
+                            Modifica
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderTransactions() {
+        const filter = $("filter").value;
+
+        const movements = [...state.movements]
+            .filter(movement => {
+                return filter === "all" || movement.type === filter;
+            })
+            .sort((a, b) => {
+                return b.date.localeCompare(a.date);
+            });
+
+        if (movements.length === 0) {
+            $("transactions").innerHTML = `
+                <div class="empty">Non ci sono movimenti da mostrare.</div>
+            `;
+
+            return;
+        }
+
+        $("transactions").innerHTML = movements.map(movement => {
+            const isIncome = movement.type === "income";
+            const sign = isIncome ? "+" : "-";
+            const color = isIncome ? "green" : "red";
+
+            return `
+                <div class="transaction">
+                    <div class="transaction-info">
+                        <div class="transaction-title">
+                            ${escapeHtml(movement.description || movement.category)}
+                        </div>
+
+                        <div class="transaction-details">
+                            ${escapeHtml(movement.category)}
+                            ·
+                            ${escapeHtml(movement.date)}
+                        </div>
+                    </div>
+
+                    <div class="transaction-right">
+                        <div class="transaction-amount ${color}">
+                            ${sign}${money(movement.amount)}
+                        </div>
+
+                        <button
+                            class="btn btn-danger btn-small"
+                            data-delete="${escapeHtml(movement.id)}"
+                        >
+                            Elimina
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderCategories() {
+        const categories = {};
+
+        for (const movement of state.movements) {
+            if (movement.type !== "expense") continue;
+
+            const category = movement.category || "Altro";
+
+            categories[category] =
+                (categories[category] || 0) + Number(movement.amount || 0);
+        }
+
+        const entries = Object.entries(categories)
+            .sort((a, b) => b[1] - a[1]);
+
+        if (entries.length === 0) {
+            $("categories").innerHTML = `
+                <div class="empty">Non ci sono ancora spese registrate.</div>
+            `;
+
+            return;
+        }
+
+        $("categories").innerHTML = entries.map(([category, amount]) => `
+            <div class="category-row">
+                <span>${escapeHtml(category)}</span>
+                <strong>${money(amount)}</strong>
+            </div>
+        `).join("");
+    }
+
+    function renderStatistics() {
+        const period = $("statisticsPeriod").value;
+        const movements = periodMovements(period);
+        const expenses = movements.filter(movement => movement.type === "expense");
+
+        $("dailyExpense").textContent = money(
+            sumExpenses(state.movements.filter(movement => movement.date === today()))
+        );
+
+        $("weeklyExpense").textContent = money(
+            sumExpenses(state.movements.filter(movement => {
+                return movement.date >= dateMinusDays(6) && movement.date <= today();
+            }))
+        );
+
+        $("monthlyExpense").textContent = money(
+            sumExpenses(getMonthMovements(currentMonth()))
+        );
+
+        $("yearlyExpense").textContent = money(
+            sumExpenses(state.movements.filter(movement => {
+                return movement.date && movement.date.startsWith(String(new Date().getFullYear()));
+            }))
+        );
+
+        const categoryTotals = {};
+
+        for (const movement of expenses) {
+            const category = movement.category || "Altro";
+
+            categoryTotals[category] =
+                (categoryTotals[category] || 0) + Number(movement.amount || 0);
+        }
+
+        const categoryLabels = Object.keys(categoryTotals);
+        const categoryValues = Object.values(categoryTotals);
+
+        if (categoryChart) {
+            categoryChart.destroy();
+        }
+
+        categoryChart = new Chart($("categoryChart"), {
+            type: "doughnut",
+            data: {
+                labels: categoryLabels.length ? categoryLabels : ["Nessuna spesa"],
+                datasets: [{
+                    data: categoryValues.length ? categoryValues : [1],
+                    backgroundColor: [
+                        "#6c8cff",
+                        "#39d98a",
+                        "#ff647c",
+                        "#ffc857",
+                        "#a78bfa",
+                        "#5eead4",
+                        "#fb923c",
+                        "#60a5fa",
+                        "#f472b6",
+                        "#a3e635",
+                        "#94a3b8"
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: "bottom",
+                        labels: {
+                            color: "#f2f4f8",
+                            padding: 14
+                        }
+                    }
+                }
+            }
+        });
+
+        const grouped = {};
+
+        for (const movement of expenses) {
+            let label = movement.date;
+
+            if (period === "year") {
+                label = movement.date.slice(0, 7);
+            }
+
+            grouped[label] = (grouped[label] || 0) + Number(movement.amount || 0);
+        }
+
+        let labels = Object.keys(grouped).sort();
+
+        if (period === "day") {
+            labels = [today()];
+            grouped[today()] = grouped[today()] || 0;
+        }
+
+        if (period === "week") {
+            labels = [];
+
+            for (let i = 6; i >= 0; i--) {
+                const label = dateMinusDays(i);
+                labels.push(label);
+                grouped[label] = grouped[label] || 0;
+            }
+        }
+
+        if (period === "month") {
+            labels = [];
+
+            const year = Number(currentMonth().slice(0, 4));
+            const month = Number(currentMonth().slice(5, 7));
+            const daysInMonth = new Date(year, month, 0).getDate();
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const label = `${currentMonth()}-${String(day).padStart(2, "0")}`;
+                labels.push(label);
+                grouped[label] = grouped[label] || 0;
+            }
+        }
+
+        if (period === "year") {
+            labels = [];
+
+            const year = String(new Date().getFullYear());
+
+            for (let month = 1; month <= 12; month++) {
+                const label = `${year}-${String(month).padStart(2, "0")}`;
+                labels.push(label);
+                grouped[label] = grouped[label] || 0;
+            }
+        }
+
+        const displayLabels = labels.map(label => {
+            if (period === "year") {
+                const monthNumber = Number(label.slice(5, 7));
+
+                return new Date(2000, monthNumber - 1, 1)
+                    .toLocaleDateString("it-IT", { month: "short" });
+            }
+
+            if (period === "month") {
+                return label.slice(8, 10);
+            }
+
+            if (period === "week") {
+                return label.slice(8, 10) + "/" + label.slice(5, 7);
+            }
+
+            return label.slice(8, 10) + "/" + label.slice(5, 7);
+        });
+
+        if (expenseChart) {
+            expenseChart.destroy();
+        }
+
+        expenseChart = new Chart($("expenseChart"), {
+            type: "bar",
+            data: {
+                labels: displayLabels,
+                datasets: [{
+                    label: "Spese (€)",
+                    data: labels.map(label => grouped[label] || 0),
+                    backgroundColor: "#6c8cff",
+                    borderRadius: 5
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: "#f2f4f8"
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: "#9ba5ba",
+                            maxRotation: 45,
+                            minRotation: 0
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: "#9ba5ba"
+                        },
+                        grid: {
+                            color: "#30384b"
+                        }
+                    }
+                }
+            }
+        });
+
+        if (expenses.length === 0) {
+            $("periodExpenses").innerHTML = `
+                <div class="empty">
+                    Nessuna spesa registrata per: ${escapeHtml(periodLabel(period))}.
+                </div>
+            `;
+
+            return;
+        }
+
+        $("periodExpenses").innerHTML = `
+            <div class="category-row">
+                <span>${escapeHtml(periodLabel(period))}</span>
+                <strong>${money(sumExpenses(expenses))}</strong>
+            </div>
+            <div class="muted">
+                ${expenses.length} movimenti di spesa nel periodo selezionato.
+            </div>
+        `;
+    }
+
+    async function runAuth(action) {
+        hideNotice("authNotice");
+
+        const email = $("authEmail").value.trim();
+        const password = $("authPassword").value;
+
+        try {
+            if (action === "login") {
+                const { error } = await db.auth.signInWithPassword({
+                    email,
+                    password
+                });
+
+                if (error) throw error;
+            }
+
+            if (action === "signup") {
+                const { data, error } = await db.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        emailRedirectTo: "https://mastro1927.github.io/Money-manger/"
+                    }
+                });
+
+                if (error) throw error;
+
+                if (!data.session) {
+                    showNotice(
+                        "authNotice",
+                        "Account creato. Controlla la tua email per confermare la registrazione.",
+                        "success"
+                    );
+                }
+            }
+
+            if (action === "reset") {
+                const { error } = await db.auth.resetPasswordForEmail(email, {
+                    redirectTo: "https://mastro1927.github.io/Money-manger/"
+                });
+
+                if (error) throw error;
+
+                showNotice(
+                    "authNotice",
+                    "Se l'indirizzo è registrato, riceverai un'email per recuperare la password.",
+                    "success"
+                );
+            }
+        } catch (error) {
+            showNotice("authNotice", explainError(error), "error");
+        }
+    }
+
+    async function saveMovement(event) {
+        event.preventDefault();
+
+        hideNotice("formNotice");
+        setBusy("saveMovementBtn", true, "Salvataggio...");
+
+        try {
+            const amount = Number($("amount").value);
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error("Inserisci un importo maggiore di zero.");
+            }
+
+            const movement = {
+                user_id: currentUser.id,
+                type: $("type").value,
+                amount,
+                category: $("category").value,
+                description: $("description").value.trim(),
+                movement_date: $("date").value
+            };
+
+            if (!movement.movement_date) {
+                throw new Error("Seleziona una data.");
+            }
+
+            const { error } = await db
+                .from("money_manager_movements")
+                .insert(movement);
+
+            if (error) throw error;
+
+            $("amount").value = "";
+            $("description").value = "";
+            $("date").value = today();
+
+            await loadCloudData();
+
+            showNotice("formNotice", "Movimento aggiunto correttamente.", "success");
+        } catch (error) {
+            showNotice("formNotice", explainError(error), "error");
+        } finally {
+            setBusy("saveMovementBtn", false);
+        }
+    }
+
+    async function deleteMovement(id) {
+        if (!confirm("Vuoi eliminare questo movimento?")) return;
+
+        try {
+            const { error } = await db
+                .from("money_manager_movements")
+                .delete()
+                .eq("id", id)
+                .eq("user_id", currentUser.id);
+
+            if (error) throw error;
+
+            await loadCloudData();
+
+            showNotice("notice", "Movimento eliminato.", "success");
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        }
+    }
+
+    async function saveStartingBalance() {
+        const value = Number($("startingBalance").value);
+
+        if (!Number.isFinite(value) || value < 0) {
+            showNotice("notice", "Inserisci un saldo iniziale valido.", "error");
+            return;
+        }
+
+        try {
+            state.starting = value;
+
+            await saveSettings();
+            render();
+
+            showNotice("notice", "Saldo iniziale salvato.", "success");
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        }
+    }
+
+    async function saveGoal() {
+        const value = Number($("goalInput").value);
+
+        if (!Number.isFinite(value) || value < 0) {
+            showNotice("notice", "Inserisci un obiettivo valido.", "error");
+            return;
+        }
+
+        try {
+            state.goal = value;
+
+            await saveSettings();
+            render();
+
+            showNotice("notice", "Obiettivo di risparmio salvato.", "success");
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        }
+    }
+
+    async function saveBudget(event) {
+        event.preventDefault();
+
+        hideNotice("budgetNotice");
+        setBusy("saveBudgetBtn", true, "Salvataggio...");
+
+        try {
+            const category = $("budgetCategory").value;
+            const month = $("budgetMonth").value;
+            const limit = Number($("budgetLimit").value);
+
+            if (!month) {
+                throw new Error("Seleziona il mese del budget.");
+            }
+
+            if (!Number.isFinite(limit) || limit <= 0) {
+                throw new Error("Il limite deve essere maggiore di zero.");
+            }
+
+            await saveBudgetToCloud(category, month, limit);
+
+            $("budgetLimit").value = "";
+
+            await loadBudgets();
+            renderBudgets();
+
+            showNotice(
+                "budgetNotice",
+                `Budget per ${category} salvato correttamente.`,
+                "success"
+            );
+        } catch (error) {
+            showNotice("budgetNotice", explainError(error), "error");
+        } finally {
+            setBusy("saveBudgetBtn", false);
+        }
+    }
+
+    async function deleteBudget(budget) {
+        const confirmed = confirm(
+            `Vuoi eliminare il budget di ${budget.category} per ${budget.month}?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const { error } = await db
+                .from("money_manager_budgets")
+                .delete()
+                .eq("user_id", currentUser.id)
+                .eq("category", budget.category)
+                .eq("month", budget.month);
+
+            if (error) throw error;
+
+            await loadBudgets();
+            renderBudgets();
+
+            showNotice("budgetNotice", "Budget eliminato.", "success");
+        } catch (error) {
+            showNotice("budgetNotice", explainError(error), "error");
+        }
+    }
+
+    function exportBackup() {
+        const backup = {
+            backupVersion: 3,
+            exportedAt: new Date().toISOString(),
+            state: {
+                starting: state.starting,
+                goal: state.goal,
+                movements: state.movements,
+                budgets: state.budgets
+            }
+        };
+
+        const blob = new Blob(
+            [JSON.stringify(backup, null, 2)],
+            { type: "application/json" }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = `money-manager-backup-${today()}.json`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        URL.revokeObjectURL(url);
+
+        showNotice("notice", "Backup esportato correttamente.", "success");
+    }
+
+    async function importBackup(event) {
+        const file = event.target.files[0];
+
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const backup = JSON.parse(text);
+            const data = backup.state;
+
+            if (
+                !data ||
+                !Array.isArray(data.movements) ||
+                !Number.isFinite(Number(data.starting)) ||
+                !Number.isFinite(Number(data.goal))
+            ) {
+                throw new Error("Il file di backup non è valido.");
+            }
+
+            const confirmed = confirm(
+                "Importare questo backup? I movimenti attuali verranno sostituiti."
+            );
+
+            if (!confirmed) return;
+
+            for (const movement of data.movements) {
+                if (
+                    !["income", "expense"].includes(movement.type) ||
+                    !Number.isFinite(Number(movement.amount)) ||
+                    Number(movement.amount) <= 0 ||
+                    !movement.date ||
+                    !movement.category
+                ) {
+                    throw new Error("Il backup contiene un movimento non valido.");
+                }
+            }
+
+            const { error: deleteError } = await db
+                .from("money_manager_movements")
+                .delete()
+                .eq("user_id", currentUser.id);
+
+            if (deleteError) throw deleteError;
+
+            if (data.movements.length > 0) {
+                const rows = data.movements.map(movement => ({
+                    user_id: currentUser.id,
+                    type: movement.type,
+                    amount: Number(movement.amount),
+                    category: movement.category,
+                    description: movement.description || "",
+                    movement_date: movement.date
+                }));
+
+                const { error } = await db
+                    .from("money_manager_movements")
+                    .insert(rows);
+
+                if (error) throw error;
+            }
+
+            state.starting = Number(data.starting);
+            state.goal = Number(data.goal);
+
+            await saveSettings();
+
+            if (Array.isArray(data.budgets)) {
+                const { error: deleteBudgetsError } = await db
+                    .from("money_manager_budgets")
+                    .delete()
+                    .eq("user_id", currentUser.id);
+
+                if (deleteBudgetsError) throw deleteBudgetsError;
+
+                if (data.budgets.length > 0) {
+                    const budgets = data.budgets.map(budget => ({
+                        user_id: currentUser.id,
+                        category: budget.category,
+                        month: budget.month,
+                        limit_amount: Number(budget.limit)
+                    }));
+
+                    const { error } = await db
+                        .from("money_manager_budgets")
+                        .upsert(budgets, {
+                            onConflict: "user_id,category,month"
+                        });
+
+                    if (error) throw error;
+                }
+            }
+
+            await loadCloudData();
+
+            showNotice("notice", "Backup importato correttamente.", "success");
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        } finally {
+            $("importFile").value = "";
+        }
+    }
+
+    async function resetAll() {
+        const confirmed = confirm(
+            "Attenzione: verranno cancellati tutti i movimenti, tutti i budget e le impostazioni di saldo e obiettivo. Vuoi continuare?"
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const { error: movementError } = await db
+                .from("money_manager_movements")
+                .delete()
+                .eq("user_id", currentUser.id);
+
+            if (movementError) throw movementError;
+
+            const { error: budgetError } = await db
+                .from("money_manager_budgets")
+                .delete()
+                .eq("user_id", currentUser.id);
+
+            if (budgetError) throw budgetError;
+
+            state.starting = 0;
+            state.goal = 0;
+
+            await saveSettings();
+            await loadCloudData();
+
+            showNotice("notice", "I tuoi dati sono stati azzerati.", "success");
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        }
+    }
+
+    async function handleSession(session) {
+        currentUser = session?.user || null;
+
+        setSignedIn(Boolean(currentUser));
+
+        if (!currentUser) {
+            state.starting = 0;
+            state.goal = 0;
+            state.movements = [];
+            state.budgets = [];
+
+            return;
+        }
+
+        try {
+            await loadCloudData();
+        } catch (error) {
+            showNotice("notice", explainError(error), "error");
+        }
+    }
+
+    function setupEvents() {
+        $("authForm").addEventListener("submit", event => {
+            event.preventDefault();
+            runAuth("login");
+        });
+
+        $("signupBtn").addEventListener("click", () => {
+            runAuth("signup");
+        });
+
+        $("resetPasswordBtn").addEventListener("click", () => {
+            runAuth("reset");
+        });
+
+        $("passwordUpdateForm").addEventListener("submit", async event => {
+            event.preventDefault();
+
+            try {
+                const password = $("newPassword").value;
+
+                if (password.length < 6) {
+                    throw new Error("La password deve contenere almeno 6 caratteri.");
+                }
+
+                const { error } = await db.auth.updateUser({ password });
+
+                if (error) throw error;
+
+                $("newPassword").value = "";
+                $("passwordUpdatePanel").classList.add("hidden");
+
+                showNotice("authNotice", "Password aggiornata correttamente.", "success");
+            } catch (error) {
+                showNotice("authNotice", explainError(error), "error");
+            }
+        });
+
+        $("signOutBtn").addEventListener("click", async () => {
+            const { error } = await db.auth.signOut();
+
+            if (error) {
+                showNotice("notice", explainError(error), "error");
+            }
+        });
+
+        $("txForm").addEventListener("submit", saveMovement);
+
+        $("saveStarting").addEventListener("click", saveStartingBalance);
+        $("saveGoal").addEventListener("click", saveGoal);
+
+        $("budgetForm").addEventListener("submit", saveBudget);
+
+        $("budgetMonth").addEventListener("change", renderBudgets);
+
+        $("budgetCategory").addEventListener("change", () => {
+            const month = $("budgetMonth").value || currentMonth();
+            const category = $("budgetCategory").value;
+
+            const existing = state.budgets.find(budget => {
+                return budget.month === month && budget.category === category;
+            });
+
+            $("budgetLimit").value = existing ? existing.limit : "";
+        });
+
+        $("budgetsList").addEventListener("click", event => {
+            const button = event.target.closest("[data-edit-budget]");
+
+            if (!button) return;
+
+            const category = button.dataset.editBudget;
+            const month = $("budgetMonth").value || currentMonth();
+
+            const budget = state.budgets.find(item => {
+                return item.category === category && item.month === month;
+            });
+
+            if (!budget) return;
+
+            $("budgetCategory").value = budget.category;
+            $("budgetLimit").value = budget.limit;
+
+            $("budgetLimit").focus();
+
+            $("saveBudgetBtn").textContent = "Aggiorna budget";
+        });
+
+        $("filter").addEventListener("change", renderTransactions);
+
+        $("statisticsPeriod").addEventListener("change", renderStatistics);
+
+        $("transactions").addEventListener("click", event => {
+            const button = event.target.closest("[data-delete]");
+
+            if (!button) return;
+
+            deleteMovement(button.dataset.delete);
+        });
+
+        $("exportBtn").addEventListener("click", exportBackup);
+
+        $("importBtn").addEventListener("click", () => {
+            $("importFile").click();
+        });
+
+        $("importFile").addEventListener("change", importBackup);
+
+        $("resetBtn").addEventListener("click", resetAll);
+
+        window.addEventListener("beforeinstallprompt", event => {
+            event.preventDefault();
+
+            installPrompt = event;
+
+            $("installBtn").classList.remove("hidden");
+        });
+
+        $("installBtn").addEventListener("click", async () => {
+            if (!installPrompt) return;
+
+            installPrompt.prompt();
+
+            await installPrompt.userChoice;
+
+            installPrompt = null;
+            $("installBtn").classList.add("hidden");
+        });
+
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker.register("./sw.js").catch(() => {});
+            });
+        }
+
+        window.addEventListener("popstate", () => {
+            if (window.location.hash.includes("type=recovery")) {
+                $("passwordUpdatePanel").classList.remove("hidden");
+            }
+        });
+    }
+
+    async function start() {
+        setupEvents();
+
+        $("date").value = today();
+        $("budgetMonth").value = currentMonth();
+
+        if (
+            !dbConfig ||
+            !dbConfig.url ||
+            !dbConfig.publishableKey
+        ) {
+            showNotice(
+                "configNotice",
+                "Configurazione Supabase mancante. Controlla il file config.js.",
+                "error"
+            );
+
+            return;
+        }
+
+        try {
+            db = window.supabase.createClient(
+                dbConfig.url,
+                dbConfig.publishableKey
+            );
+
+            const { data, error } = await db.auth.getSession();
+
+            if (error) throw error;
+
+            await handleSession(data.session);
+
+            db.auth.onAuthStateChange(async (event, session) => {
+                if (event === "PASSWORD_RECOVERY") {
+                    $("passwordUpdatePanel").classList.remove("hidden");
+                }
+
+                await handleSession(session);
+            });
+
+            if (window.location.hash.includes("type=recovery")) {
+                $("passwordUpdatePanel").classList.remove("hidden");
+            }
+        } catch (error) {
+            showNotice("configNotice", explainError(error), "error");
+        }
+    }
+
+    start();
 })();
