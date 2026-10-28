@@ -93,7 +93,13 @@
     setBusy(true); authNotice(mode==='signup'?'Creazione account in corso…':'Accesso in corso…');
     try {
       if (mode==='signup') {
-        const {data,error}=await db.auth.signUp({email,password});
+        const {data,error}=await db.auth.signUp({
+    email,
+    password,
+    options: {
+        emailRedirectTo: window.location.origin + window.location.pathname
+    }
+});
         if (error) throw error;
         if (data.session) {
           currentUser=data.user;
