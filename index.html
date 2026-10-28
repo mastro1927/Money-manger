@@ -42,6 +42,59 @@
     <div id="configNotice" class="small"></div>
   </section>
   <div id="appContent" class="hidden">
+  <section class="card" id="statisticsPanel" style="margin-bottom:16px">
+  <h2 class="section-title">📊 Statistiche delle spese</h2>
+  <p class="small">Controlla quanto spendi e dove finiscono i tuoi soldi.</p>
+
+  <div class="cards" style="margin-top:14px">
+    <div class="card">
+      <div class="metric-label">Spese di oggi</div>
+      <div class="metric negative" id="dailyExpense">€ 0,00</div>
+    </div>
+
+    <div class="card">
+      <div class="metric-label">Ultimi 7 giorni</div>
+      <div class="metric negative" id="weeklyExpense">€ 0,00</div>
+    </div>
+
+    <div class="card">
+      <div class="metric-label">Questo mese</div>
+      <div class="metric negative" id="monthlyExpense">€ 0,00</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="metric-label">Spese di quest'anno</div>
+    <div class="metric negative" id="yearlyExpense">€ 0,00</div>
+  </div>
+
+  <div class="field">
+    <label for="statisticsPeriod">Seleziona il periodo da analizzare</label>
+    <select id="statisticsPeriod">
+      <option value="day">Oggi</option>
+      <option value="week">Ultimi 7 giorni</option>
+      <option value="month" selected>Questo mese</option>
+      <option value="year">Quest'anno</option>
+    </select>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="section-title">Spese per categoria</h3>
+    <canvas id="categoryChart"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="section-title">Andamento delle spese</h3>
+    <canvas id="expenseChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Dettaglio delle uscite</h3>
+    <div id="periodExpenses">
+      <div class="empty">Le spese del periodo appariranno qui.</div>
+    </div>
+  </div>
+</section>
   <section class="cards" aria-label="Riepilogo">
     <div class="card"><div class="metric-label">Saldo disponibile</div><div id="balance" class="metric">€ 0,00</div><div class="small">Saldo iniziale + entrate − uscite</div></div>
     <div class="card"><div class="metric-label">Entrate totali</div><div id="income" class="metric positive">€ 0,00</div><div class="small">Questo mese: <span id="monthIncome">€ 0,00</span></div></div>
