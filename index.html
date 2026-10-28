@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="Gestisci entrate, uscite e obiettivi di risparmio.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>Money Manager</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2d;--card:#182238;--line:#293650;--text:#f4f7fb;--muted:#9ba9bf;--accent:#a7f3d0;--green:#6ee7b7;--red:#fda4af}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#101a30 0%,var(--bg) 45%);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
+    button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1050px;margin:auto;padding:22px 16px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px}.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:15px;background:var(--accent);color:#09251b;display:grid;place-items:center;font-size:25px;font-weight:900}.eyebrow{font-size:12px;letter-spacing:.13em;color:var(--muted);text-transform:uppercase}.title{font-size:25px;font-weight:800;letter-spacing:-.04em}.sub{font-size:13px;color:var(--muted)}.btn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:11px;padding:10px 13px;font-weight:650}.btn.primary{background:var(--accent);color:#09251b;border-color:transparent}.btn.danger{color:var(--red)}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}.card{background:rgba(24,34,56,.92);border:1px solid var(--line);border-radius:18px;padding:17px;min-width:0}.metric-label{font-size:13px;color:var(--muted)}.metric{font-size:clamp(21px,3.6vw,30px);font-weight:800;letter-spacing:-.04em;margin:7px 0;overflow-wrap:anywhere}.positive{color:var(--green)}.negative{color:var(--red)}.small{font-size:12px;color:var(--muted)}.layout{display:grid;grid-template-columns:minmax(0, .85fr) minmax(0,1.15fr);gap:16px}.section-title{font-size:17px;font-weight:750;margin:0 0 14px}.field{margin-bottom:12px}.field label{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}.field input,.field select,.inline-input{width:100%;background:#0d1527;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 12px;min-width:0}.field input:focus,.field select:focus,.inline-input:focus{outline:2px solid var(--accent);outline-offset:1px}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.form-actions{display:flex;gap:9px}.form-actions button{flex:1}.transactions{margin-top:5px}.transaction{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.transaction:last-child{border-bottom:0}.tx-left{min-width:0}.tx-name{font-weight:650;overflow-wrap:anywhere}.tx-meta{font-size:12px;color:var(--muted)}.tx-right{display:flex;align-items:center;gap:8px;white-space:nowrap}.delete{border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);padding:5px 9px}.empty{color:var(--muted);font-size:14px;padding:18px 0}.lower{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.bar span{height:100%;display:block;background:var(--accent);border-radius:99px;width:0}.category{margin:13px 0}.category-top{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:6px}.tools{display:flex;gap:8px;flex-wrap:wrap}.notice{font-size:13px;color:var(--accent);min-height:20px;margin-top:8px}.footer{margin-top:18px;color:var(--muted);font-size:12px;display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}.badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:99px;padding:5px 9px;font-size:11px;color:var(--muted)}.goal-number{font-size:22px;font-weight:800;margin:12px 0}.hidden{display:none!important}.auth-card{max-width:520px;margin:12px auto 20px}.auth-card .field{margin-bottom:14px}.auth-actions{flex-wrap:wrap}.auth-actions button{min-width:120px}.privacy-note{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:14px;color:var(--muted);font-size:12px}
+    @media(max-width:700px){.app{padding:16px 12px 30px}.cards{grid-template-columns:1fr;gap:9px}.card{padding:15px}.metric{font-size:26px}.layout,.lower{grid-template-columns:1fr}.title{font-size:22px}.top{align-items:flex-start}.top>.tools{width:100%}.top>.tools .btn{flex:1}.transaction{align-items:flex-start}.tx-right{gap:5px}.tx-right strong{font-size:13px}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <div class="brand"><div class="logo">€</div><div><div class="eyebrow">Finanze personali</div><div class="title">Money Manager</div><div class="sub">I tuoi soldi, sotto controllo.</div></div></div>
+    <div class="tools"><button id="installBtn" class="btn primary hidden">Installa app</button><button id="exportBtn" class="btn hidden">Backup dati ↓</button><button id="importBtn" class="btn hidden">Ripristina backup ↑</button><button id="signOutBtn" class="btn hidden">Esci</button><input id="importFile" type="file" accept="application/json,.json" class="hidden"></div>
+  </header>
+  <section id="authPanel" class="card auth-card">
+    <h2 class="section-title">Accedi al tuo Money Manager</h2>
+    <p class="small">Crea un account personale oppure accedi. I tuoi dati sono separati da quelli degli altri utenti.</p>
+    <form id="authForm">
+      <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" maxlength="254" required placeholder="nome@email.com"></div>
+      <div class="field"><label for="authPassword">Password (almeno 8 caratteri)</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required placeholder="Almeno 8 caratteri"></div>
+      <div class="form-actions auth-actions"><button id="loginBtn" class="btn primary" type="submit" data-mode="login">Accedi</button><button id="signupBtn" class="btn" type="submit" data-mode="signup">Crea account</button></div>
+    </form>
+    <button id="resetPasswordBtn" class="btn" style="margin-top:10px">Ho dimenticato la password</button>
+    <div id="authNotice" class="notice" role="status" aria-live="polite"></div>
+    <div id="passwordUpdatePanel" class="hidden" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+      <h3 class="section-title">Imposta una nuova password</h3>
+      <form id="passwordUpdateForm">
+        <div class="field"><label for="newPassword">Nuova password (almeno 8 caratteri)</label><input id="newPassword" type="password" minlength="8" autocomplete="new-password" required></div>
+        <button class="btn primary" type="submit">Salva nuova password</button>
+      </form>
+    </div>
+    <div id="configNotice" class="small"></div>
+  </section>
+  <div id="appContent" class="hidden">
+  <section class="cards" aria-label="Riepilogo">
+    <div class="card"><div class="metric-label">Saldo disponibile</div><div id="balance" class="metric">€ 0,00</div><div class="small">Saldo iniziale + entrate − uscite</div></div>
+    <div class="card"><div class="metric-label">Entrate totali</div><div id="income" class="metric positive">€ 0,00</div><div class="small">Questo mese: <span id="monthIncome">€ 0,00</span></div></div>
+    <div class="card"><div class="metric-label">Uscite totali</div><div id="expense" class="metric negative">€ 0,00</div><div class="small">Questo mese: <span id="monthExpense">€ 0,00</span></div></div>
+  </section>
+  <section class="layout">
+    <div class="card">
+      <h2 class="section-title">＋ Nuovo movimento</h2>
+      <form id="txForm">
+        <div class="field"><label for="type">Tipo</label><select id="type"><option value="expense">Uscita</option><option value="income">Entrata</option></select></div>
+        <div class="field"><label for="amount">Importo (€)</label><input id="amount" type="number" min="0.01" max="100000000" step="0.01" placeholder="Es. 25,50" required></div>
+        <div class="field"><label for="category">Categoria</label><select id="category"><option>Alimentari</option><option>Abbigliamento</option><option>Trasporti</option><option>Scuola</option><option>Svago</option><option>Casa</option><option>Vendite</option><option>Stipendio</option><option>Regali</option><option>Altro</option></select></div>
+        <div class="field"><label for="description">Descrizione</label><input id="description" maxlength="100" placeholder="Es. pranzo, felpa, vendita scarpe"></div>
+        <div class="field"><label for="date">Data</label><input id="date" type="date" required></div>
+        <div class="form-actions"><button class="btn primary" type="submit">Aggiungi movimento</button></div>
+        <div id="formNotice" class="notice" aria-live="polite"></div>
+      </form>
+      <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+      <div class="field"><label for="startingBalance">Saldo iniziale (€)</label><div class="row"><input id="startingBalance" class="inline-input" type="number" min="0" max="100000000" step="0.01" value="0"><button id="saveStarting" class="btn">Salva</button></div><div class="small" style="margin-top:6px">I soldi che avevi prima di iniziare a usare l'app.</div></div>
+    </div>
+    <div class="card">
+      <div class="row" style="flex-wrap:wrap;margin-bottom:8px"><h2 class="section-title" style="margin:0">Movimenti</h2><select id="filter" class="inline-input" style="width:auto"><option value="all">Tutti</option><option value="income">Entrate</option><option value="expense">Uscite</option></select></div>
+      <div id="transactions" class="transactions"><div class="empty">Non hai ancora registrato movimenti.</div></div>
+    </div>
+  </section>
+  <section class="lower">
+    <div class="card"><h2 class="section-title">Dove spendi</h2><div class="small">Totale delle uscite divise per categoria.</div><div id="categories"><div class="empty">Le categorie appariranno qui.</div></div></div>
+    <div class="card"><h2 class="section-title">Obiettivo di risparmio</h2><div class="small">Scegli quanto vuoi mettere da parte.</div><div class="field" style="margin-top:14px"><label for="goalInput">Obiettivo (€)</label><div class="row"><input id="goalInput" class="inline-input" type="number" min="1" max="100000000" step="0.01" placeholder="Es. 1000"><button id="saveGoal" class="btn">Salva</button></div></div><div class="row"><span class="small">Saldo disponibile</span><strong id="goalBalance">€ 0,00</strong></div><div class="bar" style="margin-top:10px"><span id="goalBar"></span></div><div id="goalText" class="small" style="margin-top:8px">Imposta un obiettivo per iniziare.</div></div>
+  </section>
+  <div id="notice" class="notice" role="status" aria-live="polite"></div>
+  <footer class="footer"><span><span class="badge">● Dati privati del tuo account</span></span><button id="resetBtn" class="btn danger">Azzera tutti i dati</button></footer>
+  <p class="small" style="margin-top:12px">Privacy: i dati vengono salvati online nel tuo account. Le regole del database impediscono agli altri utenti di leggere o modificare i tuoi movimenti. Usa una password unica e non condividerla. Non inserire credenziali bancarie.</p>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
