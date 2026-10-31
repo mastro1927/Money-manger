@@ -1,31 +1,27 @@
 (() => {
     const today = () => {
         const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-
-        return `${year}-${month}-${day}`;
+        return [
+            d.getFullYear(),
+            String(d.getMonth() + 1).padStart(2, "0"),
+            String(d.getDate()).padStart(2, "0")
+        ].join("-");
     };
 
     const currentMonth = () => today().slice(0, 7);
 
-    const money = value => {
-        return new Intl.NumberFormat("it-IT", {
-            style: "currency",
-            currency: "EUR"
-        }).format(Number(value) || 0);
-    };
+    const money = value => new Intl.NumberFormat("it-IT", {
+        style: "currency",
+        currency: "EUR"
+    }).format(Number(value) || 0);
 
-    const escapeHtml = value => {
-        return String(value ?? "").replace(/[&<>"']/g, char => ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;"
-        })[char]);
-    };
+    const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
 
     const dbConfig = window.MONEY_MANAGER_CONFIG;
 
@@ -46,20 +42,16 @@
 
     function showNotice(id, message, type = "") {
         const element = $(id);
-
         if (!element) return;
 
         element.textContent = message;
         element.className = "notice visible";
 
-        if (type) {
-            element.classList.add(type);
-        }
+        if (type) element.classList.add(type);
     }
 
     function hideNotice(id) {
         const element = $(id);
-
         if (!element) return;
 
         element.textContent = "";
@@ -68,7 +60,6 @@
 
     function setBusy(buttonId, busy, busyText = "Attendere...") {
         const button = $(buttonId);
-
         if (!button) return;
 
         if (busy) {
@@ -84,11 +75,9 @@
     function setSignedIn(signedIn) {
         $("authPanel").classList.toggle("hidden", signedIn);
         $("appContent").classList.toggle("hidden", !signedIn);
-
         $("signOutBtn").classList.toggle("hidden", !signedIn);
         $("exportBtn").classList.toggle("hidden", !signedIn);
         $("importBtn").classList.toggle("hidden", !signedIn);
-
         $("configNotice").classList.toggle("hidden", signedIn);
 
         if (signedIn) {
@@ -101,9 +90,7 @@
     }
 
     function explainError(error) {
-        if (!error) {
-            return "Si è verificato un errore.";
-        }
+        if (!error) return "Si è verificato un errore.";
 
         const message = error.message || String(error);
 
@@ -185,17 +172,13 @@
     }
 
     function periodMovements(period) {
-        const now = new Date();
         const currentDay = today();
-        const currentYear = String(now.getFullYear());
-        const currentMonthValue = currentMonth();
+        const currentYear = String(new Date().getFullYear());
 
         return state.movements.filter(movement => {
             if (!movement.date) return false;
 
-            if (period === "day") {
-                return movement.date === currentDay;
-            }
+            if (period === "day") return movement.date === currentDay;
 
             if (period === "week") {
                 return movement.date >= dateMinusDays(6) &&
@@ -203,7 +186,7 @@
             }
 
             if (period === "month") {
-                return movement.date.startsWith(currentMonthValue);
+                return movement.date.startsWith(currentMonth());
             }
 
             if (period === "year") {
@@ -229,6 +212,7 @@
         const result = totals();
 
         const monthMovements = getMonthMovements(currentMonth());
+
         const monthIncome = monthMovements.reduce((total, movement) => {
             return total + (
                 movement.type === "income"
@@ -247,7 +231,6 @@
 
         $("startingBalance").value = state.starting;
         $("goalInput").value = state.goal;
-
         $("goalBalance").textContent = money(result.balance);
 
         if (state.goal > 0) {
@@ -324,7 +307,6 @@
         }));
 
         await loadBudgets();
-
         render();
     }
 
@@ -388,8 +370,65 @@
 
         const monthTotal = sumExpenses(monthMovements);
 
-        $("budgetsSummary").textContent =
-            `Spese totali del mese: ${money(monthTotal)}`;
+        const totalLimit = monthBudgets.reduce((total, budget) => {
+            return total + Number(budget.limit || 0);
+        }, 0);
+
+        const remaining = totalLimit - monthTotal;
+
+        const percentage = totalLimit > 0
+            ? monthTotal / totalLimit * 100
+            : 0;
+
+        const barPercentage = Math.min(100, percentage);
+
+        let summaryClass = "";
+        let summaryMessage = "Nessun budget impostato.";
+
+        if (totalLimit > 0) {
+            if (percentage >= 100) {
+                summaryClass = "danger";
+                summaryMessage = `Hai superato il budget complessivo di ${money(Math.abs(remaining))}.`;
+            } else if (percentage >= 80) {
+                summaryClass = "warning";
+                summaryMessage = `Attenzione: hai utilizzato il ${percentage.toFixed(0)}% del budget complessivo.`;
+            } else {
+                summaryMessage = `Ti restano ${money(remaining)} da spendere.`;
+            }
+        }
+
+        $("budgetsSummary").innerHTML = `
+            <div class="budget-summary-card">
+                <div class="budget-summary-grid">
+                    <div>
+                        <div class="muted">Budget totale</div>
+                        <strong>${money(totalLimit)}</strong>
+                    </div>
+                    <div>
+                        <div class="muted">Spese effettuate</div>
+                        <strong>${money(monthTotal)}</strong>
+                    </div>
+                    <div>
+                        <div class="muted">Disponibili</div>
+                        <strong class="${summaryClass}">${money(remaining)}</strong>
+                    </div>
+                </div>
+
+                <div class="budget-progress">
+                    <div class="bar ${summaryClass}"
+                         style="width:${barPercentage}%">
+                    </div>
+                </div>
+
+                <div class="budget-summary-bottom ${summaryClass}">
+                    ${escapeHtml(summaryMessage)}
+                </div>
+
+                <div class="muted">
+                    ${percentage.toFixed(1)}% del budget complessivo utilizzato
+                </div>
+            </div>
+        `;
 
         if (monthBudgets.length === 0) {
             $("budgetsList").innerHTML = `
@@ -411,22 +450,25 @@
                 }, 0);
 
             const limit = Number(budget.limit) || 0;
-            const remaining = limit - spent;
-            const percentage = limit > 0 ? spent / limit * 100 : 0;
-            const barPercentage = Math.min(100, percentage);
+            const categoryRemaining = limit - spent;
+            const categoryPercentage = limit > 0
+                ? spent / limit * 100
+                : 0;
+
+            const categoryBarPercentage = Math.min(100, categoryPercentage);
 
             let barClass = "";
             let statusClass = "";
-            let statusText = `Disponibili ${money(remaining)}`;
+            let statusText = `Disponibili ${money(categoryRemaining)}`;
 
-            if (percentage >= 100) {
+            if (categoryPercentage >= 100) {
                 barClass = "danger";
                 statusClass = "danger";
-                statusText = `Limite superato di ${money(Math.abs(remaining))}`;
-            } else if (percentage >= 80) {
+                statusText = `Limite superato di ${money(Math.abs(categoryRemaining))}`;
+            } else if (categoryPercentage >= 80) {
                 barClass = "warning";
                 statusClass = "warning";
-                statusText = `Attenzione: restano ${money(remaining)}`;
+                statusText = `Attenzione: restano ${money(categoryRemaining)}`;
             }
 
             return `
@@ -436,7 +478,6 @@
                             <div class="budget-category">
                                 ${escapeHtml(budget.category)}
                             </div>
-
                             <div class="muted">
                                 Limite: ${money(limit)}
                             </div>
@@ -445,16 +486,15 @@
                         <div class="budget-amount">
                             <div><strong>${money(spent)}</strong></div>
                             <div class="muted">
-                                ${percentage.toFixed(0)}% utilizzato
+                                ${categoryPercentage.toFixed(0)}% utilizzato
                             </div>
                         </div>
                     </div>
 
                     <div class="budget-progress">
-                        <div
-                            class="bar ${barClass}"
-                            style="width:${barPercentage}%"
-                        ></div>
+                        <div class="bar ${barClass}"
+                             style="width:${categoryBarPercentage}%">
+                        </div>
                     </div>
 
                     <div class="budget-bottom">
@@ -462,12 +502,19 @@
                             ${escapeHtml(statusText)}
                         </div>
 
-                        <button
-                            class="btn btn-secondary btn-small"
-                            data-edit-budget="${escapeHtml(budget.category)}"
-                        >
-                            Modifica
-                        </button>
+                        <div class="budget-actions">
+                            <button
+                                class="btn btn-secondary btn-small"
+                                data-edit-budget="${escapeHtml(budget.category)}">
+                                Modifica
+                            </button>
+
+                            <button
+                                class="btn btn-danger btn-small"
+                                data-delete-budget="${escapeHtml(budget.category)}">
+                                Elimina
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -481,9 +528,7 @@
             .filter(movement => {
                 return filter === "all" || movement.type === filter;
             })
-            .sort((a, b) => {
-                return b.date.localeCompare(a.date);
-            });
+            .sort((a, b) => b.date.localeCompare(a.date));
 
         if (movements.length === 0) {
             $("transactions").innerHTML = `
@@ -519,8 +564,7 @@
 
                         <button
                             class="btn btn-danger btn-small"
-                            data-delete="${escapeHtml(movement.id)}"
-                        >
+                            data-delete="${escapeHtml(movement.id)}">
                             Elimina
                         </button>
                     </div>
@@ -597,9 +641,7 @@
         const categoryLabels = Object.keys(categoryTotals);
         const categoryValues = Object.values(categoryTotals);
 
-        if (categoryChart) {
-            categoryChart.destroy();
-        }
+        if (categoryChart) categoryChart.destroy();
 
         categoryChart = new Chart($("categoryChart"), {
             type: "doughnut",
@@ -624,6 +666,7 @@
                 }]
             },
             options: {
+                responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
@@ -700,20 +743,12 @@
                     .toLocaleDateString("it-IT", { month: "short" });
             }
 
-            if (period === "month") {
-                return label.slice(8, 10);
-            }
-
-            if (period === "week") {
-                return label.slice(8, 10) + "/" + label.slice(5, 7);
-            }
+            if (period === "month") return label.slice(8, 10);
 
             return label.slice(8, 10) + "/" + label.slice(5, 7);
         });
 
-        if (expenseChart) {
-            expenseChart.destroy();
-        }
+        if (expenseChart) expenseChart.destroy();
 
         expenseChart = new Chart($("expenseChart"), {
             type: "bar",
@@ -727,6 +762,7 @@
                 }]
             },
             options: {
+                responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
@@ -774,6 +810,7 @@
                 <span>${escapeHtml(periodLabel(period))}</span>
                 <strong>${money(sumExpenses(expenses))}</strong>
             </div>
+
             <div class="muted">
                 ${expenses.length} movimenti di spesa nel periodo selezionato.
             </div>
@@ -893,7 +930,6 @@
             if (error) throw error;
 
             await loadCloudData();
-
             showNotice("notice", "Movimento eliminato.", "success");
         } catch (error) {
             showNotice("notice", explainError(error), "error");
@@ -910,7 +946,6 @@
 
         try {
             state.starting = value;
-
             await saveSettings();
             render();
 
@@ -930,7 +965,6 @@
 
         try {
             state.goal = value;
-
             await saveSettings();
             render();
 
@@ -955,6 +989,10 @@
                 throw new Error("Seleziona il mese del budget.");
             }
 
+            if (!category) {
+                throw new Error("Seleziona una categoria.");
+            }
+
             if (!Number.isFinite(limit) || limit <= 0) {
                 throw new Error("Il limite deve essere maggiore di zero.");
             }
@@ -962,6 +1000,7 @@
             await saveBudgetToCloud(category, month, limit);
 
             $("budgetLimit").value = "";
+            $("saveBudgetBtn").textContent = "Salva budget";
 
             await loadBudgets();
             renderBudgets();
@@ -1038,7 +1077,6 @@
 
     async function importBackup(event) {
         const file = event.target.files[0];
-
         if (!file) return;
 
         try {
@@ -1199,13 +1237,8 @@
             runAuth("login");
         });
 
-        $("signupBtn").addEventListener("click", () => {
-            runAuth("signup");
-        });
-
-        $("resetPasswordBtn").addEventListener("click", () => {
-            runAuth("reset");
-        });
+        $("signupBtn").addEventListener("click", () => runAuth("signup"));
+        $("resetPasswordBtn").addEventListener("click", () => runAuth("reset"));
 
         $("passwordUpdateForm").addEventListener("submit", async event => {
             event.preventDefault();
@@ -1218,7 +1251,6 @@
                 }
 
                 const { error } = await db.auth.updateUser({ password });
-
                 if (error) throw error;
 
                 $("newPassword").value = "";
@@ -1244,7 +1276,6 @@
         $("saveGoal").addEventListener("click", saveGoal);
 
         $("budgetForm").addEventListener("submit", saveBudget);
-
         $("budgetMonth").addEventListener("change", renderBudgets);
 
         $("budgetCategory").addEventListener("change", () => {
@@ -1256,40 +1287,49 @@
             });
 
             $("budgetLimit").value = existing ? existing.limit : "";
+            $("saveBudgetBtn").textContent = existing
+                ? "Aggiorna budget"
+                : "Salva budget";
         });
 
         $("budgetsList").addEventListener("click", event => {
-            const button = event.target.closest("[data-edit-budget]");
+            const editButton = event.target.closest("[data-edit-budget]");
+            const deleteButton = event.target.closest("[data-delete-budget]");
 
-            if (!button) return;
-
-            const category = button.dataset.editBudget;
             const month = $("budgetMonth").value || currentMonth();
 
-            const budget = state.budgets.find(item => {
-                return item.category === category && item.month === month;
-            });
+            if (editButton) {
+                const category = editButton.dataset.editBudget;
 
-            if (!budget) return;
+                const budget = state.budgets.find(item => {
+                    return item.category === category && item.month === month;
+                });
 
-            $("budgetCategory").value = budget.category;
-            $("budgetLimit").value = budget.limit;
+                if (!budget) return;
 
-            $("budgetLimit").focus();
+                $("budgetCategory").value = budget.category;
+                $("budgetLimit").value = budget.limit;
+                $("saveBudgetBtn").textContent = "Aggiorna budget";
+                $("budgetLimit").focus();
+            }
 
-            $("saveBudgetBtn").textContent = "Aggiorna budget";
+            if (deleteButton) {
+                const category = deleteButton.dataset.deleteBudget;
+
+                const budget = state.budgets.find(item => {
+                    return item.category === category && item.month === month;
+                });
+
+                if (budget) deleteBudget(budget);
+            }
         });
 
         $("filter").addEventListener("change", renderTransactions);
-
         $("statisticsPeriod").addEventListener("change", renderStatistics);
 
         $("transactions").addEventListener("click", event => {
             const button = event.target.closest("[data-delete]");
-
-            if (!button) return;
-
-            deleteMovement(button.dataset.delete);
+            if (button) deleteMovement(button.dataset.delete);
         });
 
         $("exportBtn").addEventListener("click", exportBackup);
@@ -1299,14 +1339,11 @@
         });
 
         $("importFile").addEventListener("change", importBackup);
-
         $("resetBtn").addEventListener("click", resetAll);
 
         window.addEventListener("beforeinstallprompt", event => {
             event.preventDefault();
-
             installPrompt = event;
-
             $("installBtn").classList.remove("hidden");
         });
 
@@ -1314,7 +1351,6 @@
             if (!installPrompt) return;
 
             installPrompt.prompt();
-
             await installPrompt.userChoice;
 
             installPrompt = null;
