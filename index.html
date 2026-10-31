@@ -363,6 +363,53 @@
         font-size: 18px;
       }
     }
+    .dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.chart-panel {
+  min-width: 0;
+  height: 340px;
+  overflow: hidden;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 260px;
+}
+
+.chart-container-small {
+  height: 210px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.chart-container canvas {
+  max-width: 100% !important;
+}
+
+@media (max-width: 850px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-panel {
+    height: 320px;
+  }
+
+  .chart-container {
+    height: 240px;
+  }
+
+  .chart-container-small {
+    height: 200px;
+  }
+}
+    
   </style>
 </head>
 
