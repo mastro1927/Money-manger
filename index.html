@@ -409,7 +409,58 @@
     height: 200px;
   }
 }
-    
+/* RIEPILOGO BUDGET */
+
+.budget-summary-card {
+  padding: 18px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  background: rgba(108, 140, 255, 0.08);
+  border: 1px solid var(--border);
+}
+
+.budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 18px;
+}
+
+.budget-summary-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 20px;
+}
+
+.budget-summary-bottom {
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+
+.budget-summary-bottom.warning,
+.warning {
+  color: var(--yellow);
+}
+
+.budget-summary-bottom.danger,
+.danger {
+  color: var(--red);
+}
+
+.budget-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .budget-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-actions {
+    flex-wrap: wrap;
+  }
+}    
   </style>
 </head>
 
